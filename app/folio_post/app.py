@@ -172,6 +172,21 @@ class PostApp(Gtk.Application):
             css2.load_from_path(extra)
             Gtk.StyleContext.add_provider_for_screen(Gdk.Screen.get_default(), css2,
                                                      Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION + 1)
+        # X2-01: every window Post opens wears Post's colours, so a dark or coloured desktop theme
+        # never shows through (folio-own: all of them; folio-dialog: dialogs and small windows)
+        from gi.repository import GObject
+
+        def _own(w, *a):
+            try:
+                if w.get_window_type() == Gtk.WindowType.TOPLEVEL and not isinstance(w, Gtk.FileChooserDialog):
+                    ctx = w.get_style_context()
+                    ctx.add_class("folio-own")
+                    if isinstance(w, Gtk.Dialog) or not hasattr(w, "ribbon"):
+                        ctx.add_class("folio-dialog")
+            except Exception:
+                pass
+            return True
+        GObject.add_emission_hook(Gtk.Window, "realize", _own)
         from . import appearance
         self._dark_css = Gtk.CssProvider()
         self._dark_css.load_from_path(os.path.join(os.path.dirname(__file__), "theme-dark.css"))
@@ -277,6 +292,16 @@ def make_default():
         subprocess.run(["xdg-mime", "default", APP_ID + ".desktop", t], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
+def attach_argv(argv):
+    """folio-post --attach FILE... (Send as attachment from the other Folio apps): the files go in a
+    mailto: link, so a Post that is already running opens the new message."""
+    if "--attach" not in argv:
+        return list(argv)
+    i = argv.index("--attach")
+    files = [os.path.abspath(a) for a in argv[i + 1:]]
+    return argv[:i] + ["mailto:?" + "&".join("attach=" + urllib.parse.quote("file://" + f) for f in files)]
+
+
 def main(argv=None):
     argv = list(argv if argv is not None else sys.argv)
     if "--version" in argv:
@@ -294,10 +319,7 @@ def main(argv=None):
         return 0
     # "Send as attachment" from the other apps: folio-post --attach FILE... becomes a mailto: link the running
     # Post (or this one) opens
-    if "--attach" in argv:
-        i = argv.index("--attach")
-        files = [os.path.abspath(a) for a in argv[i + 1:]]
-        argv = argv[:i] + ["mailto:?" + "&".join("attach=" + urllib.parse.quote("file://" + f) for f in files)]
+    argv = attach_argv(argv)
     app = PostApp()
     code = app.run(argv)
     sys.stdout.flush()

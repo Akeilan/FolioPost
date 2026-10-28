@@ -407,3 +407,49 @@ popover check:not(:checked):not(:indeterminate), popover radio:not(:checked) {
 .folio-bs-navbtn:hover { background: alpha(#ffffff, 0.15); }
 .folio-bs-navbtn.active { background: alpha(#ffffff, 0.25); }
 .folio-bs-navbtn.active label { font-weight: bold; }
+
+.folio-own, .folio-own.background { background-color: #f3f3f3; background-image: none; color: #262626; }
+.folio-own list row:not(:selected) { background-color: transparent; background-image: none; color: #262626; }
+
+/* ---------- X2-01: Post's own colours on any desktop theme (folio-own: every Post window; folio-dialog: dialogs) ---------- */
+.folio-own entry, .folio-own spinbutton, .folio-own spinbutton entry, .folio-own textview, .folio-own textview text {
+  background-color: #ffffff; background-image: none; color: #262626; border-color: #c8c8c8; caret-color: #262626; }
+.folio-own spinbutton button { background-color: #ffffff; background-image: none; color: #262626; border-color: #c8c8c8; box-shadow: none; }
+.folio-own spinbutton button:hover { background-color: #e8e8e8; }
+.folio-own entry selection, .folio-own textview text selection { background-color: #d9d9ec; color: #262626; }
+.folio-own check, .folio-own radio { background-color: #ffffff; background-image: none; border: 1px solid #8a8a8a; color: #262626; }
+.folio-own check:checked, .folio-own radio:checked { background-color: #333366; border-color: #222244; color: #ffffff; }
+.folio-own checkbutton, .folio-own radiobutton, .folio-own checkbutton label, .folio-own radiobutton label { color: #262626; }
+.folio-own checkbutton:disabled label, .folio-own radiobutton:disabled label { color: #a0a0a0; }
+.folio-own list, .folio-own treeview.view, .folio-own iconview { background-color: #ffffff; color: #262626; }
+.folio-own treeview.view:selected, .folio-own list row:selected { background-color: #d9d9ec; color: #262626; }
+.folio-own combobox button, .folio-own combobox button label, .folio-own combobox button cellview { color: #262626; }
+.folio-own combobox button { background-color: #ffffff; background-image: none; border: 1px solid #c8c8c8; box-shadow: none; }
+.folio-own scale trough { background-color: #d6d6d6; border-color: #d6d6d6; }
+.folio-own scale slider { background-color: #ffffff; background-image: none; border: 1px solid #8a8a8a; }
+.folio-own scrollbar, .folio-own scrollbar trough { background-color: transparent; border-color: transparent; }
+.folio-own scrollbar slider { background-color: #8a8a8a; }
+.folio-own separator { background-color: #c8c8c8; }
+.folio-dialog, .folio-dialog.background, .folio-dialog .dialog-vbox, .folio-dialog notebook, .folio-dialog notebook header,
+.folio-dialog notebook stack, .folio-dialog viewport, .folio-dialog headerbar, .folio-dialog .titlebar {
+  background-color: #f3f3f3; background-image: none; color: #262626; }
+.folio-dialog headerbar, .folio-dialog .titlebar { border-color: #c8c8c8; box-shadow: none; }
+.folio-dialog label, .folio-dialog headerbar .title, .folio-dialog notebook tab label { color: #262626; }
+.folio-dialog notebook tab { background: transparent; }
+.folio-dialog notebook tab:checked { border-color: #333366; }
+.folio-dialog frame > border, .folio-dialog notebook { border-color: #c8c8c8; }
+.folio-dialog button:not(.folio-default):not(.suggested-action):not(.flat):not(.folio-symbol) {
+  background-color: #fdfdfd; background-image: none; color: #262626; border: 1px solid #c8c8c8; box-shadow: none; text-shadow: none; }
+.folio-dialog button:not(.folio-default):not(.suggested-action):not(.flat):not(.folio-symbol):hover { background-color: #e8e8e8; }
+.folio-dialog button.flat, .folio-dialog button.flat label { color: #262626; }
+.folio-dialog button.suggested-action, .folio-dialog button.folio-default { background-color: #333366; background-image: none; color: #ffffff; border-color: #222244; }
+.folio-dialog button.suggested-action label, .folio-dialog button.folio-default label { color: #ffffff; }
+.folio-dialog .dim-label { color: #666666; }
+.folio-dialog label:disabled, .folio-dialog button:disabled label { color: #a0a0a0; }
+tooltip, tooltip.background { background-color: #ffffff; color: #262626; border: 1px solid #c8c8c8; }
+tooltip label { color: #262626; }
+/* X2-01: the File view's buttons keep Post's text colours */
+.folio-backstage button:not(.suggested-action):not(.link):not(.folio-bs-navbtn), .folio-backstage button:not(.suggested-action):not(.link):not(.folio-bs-navbtn) label,
+.folio-bs-printbtn label, .folio-backstage checkbutton label, .folio-backstage radiobutton label { color: #262626; }
+.folio-backstage button:not(.suggested-action):not(.link):not(.flat):not(.folio-bs-navbtn) { background-color: #ffffff; background-image: none; }
+.folio-backstage button.suggested-action label { color: #ffffff; }

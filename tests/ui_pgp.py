@@ -71,7 +71,7 @@ try:
     # encrypted and signed
     c = app.compose(account=aid, to="bob@example.org", subject="Secret plans")
     pump(0.3)
-    c.editor.buf.insert_at_cursor("The cake is in the oven.")
+    c.editor.insert_text("The cake is in the oven.")
     c.run("toggle-encrypt")
     c.run("toggle-sign")
     c.run("send")
@@ -85,7 +85,7 @@ try:
     # signed only, arriving by mail, shown in the Reading Pane
     c = app.compose(account=aid, to="me@example.org", subject="Signed note")
     pump(0.3)
-    c.editor.buf.insert_at_cursor("Please check this signature.")
+    c.editor.insert_text("Please check this signature.")
     c.run("toggle-sign")
     c.run("send")
     ok = wait(lambda: any(b"Signed note" in r for _f, _r, r in mw.smtp_log), 20)

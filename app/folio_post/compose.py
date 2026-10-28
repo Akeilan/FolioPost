@@ -12,6 +12,17 @@ from . import APP_NAME, icons, mime
 from .dialogs import Dialogs
 from .readingpane import nice_size
 from .richedit import RichEditor
+from . import writered
+
+
+def make_editor():
+    """Writer's editor (M-04) when its engine is here, else Post's own."""
+    if writered.available():
+        try:
+            return writered.WriterEditor()
+        except Exception as e:
+            print("Folio Post: Writer's editor failed to start:", e)
+    return RichEditor()
 from .ribbon import CheckControl, ComboControl, Ribbon, SplitButton, Tab, menu_popover
 from .ribbon_post import Builder
 
@@ -205,9 +216,9 @@ class ComposeWindow(Gtk.Window):
         self.att_box.set_no_show_all(True)
         self.outer.pack_start(self.att_box, False, False, 0)
         # body
-        self.editor = RichEditor()
+        self.editor = make_editor()
         self.editor.on_state = self.sync_ribbon
-        self.editor.buf.connect("changed", lambda *_: self._dirty())
+        self.editor.connect_changed(lambda *_: self._dirty())
         self.editor.connect("focus-in-event", lambda *_: (self.sync_ribbon(self.editor.state()), False)[1])
         self.setup_spelling()
         self.editor.drag_dest_set(Gtk.DestDefaults.ALL, [Gtk.TargetEntry.new("text/uri-list", 0, 0)], Gdk.DragAction.COPY)
@@ -255,7 +266,7 @@ class ComposeWindow(Gtk.Window):
                 self.editor.load_html("<p>%s</p>" % html.escape(body_text).replace("\n", "<br>"))
             elif sig:
                 self.editor.load_html("<p><br></p><p><br></p>" + sig)
-            self.editor.buf.place_cursor(self.editor.buf.get_start_iter())
+            self.editor.caret_to_start()
             for p in attach or ():
                 p = p[7:] if p.startswith("file://") else p
                 if os.path.isfile(p):
@@ -970,7 +981,7 @@ class ComposeWindow(Gtk.Window):
             if ok:
                 self.editor.insert_picture(data, "image/png")
                 return
-        self.editor.buf.paste_clipboard(cb, None, True)
+        self.editor.paste()
 
     def act_paste_text(self):
         t = Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD).wait_for_text()
@@ -982,15 +993,15 @@ class ComposeWindow(Gtk.Window):
             e.insert_text(t, pos)
             e.set_position(pos + len(t))
         else:
-            self.editor.buf.insert_at_cursor(t)
+            self.editor.insert_text(t)
 
     def act_cut(self):
         e = self._focus_entry()
-        (e.cut_clipboard() if e else self.editor.buf.cut_clipboard(Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD), True))
+        (e.cut_clipboard() if e else self.editor.cut())
 
     def act_copy(self):
         e = self._focus_entry()
-        (e.copy_clipboard() if e else self.editor.buf.copy_clipboard(Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD)))
+        (e.copy_clipboard() if e else self.editor.copy())
 
     def act_format_painter(self):
         st = self.editor.state()
@@ -999,14 +1010,21 @@ class ComposeWindow(Gtk.Window):
         hid = [None]
 
         def released(*_):
-            if self.editor.buf.get_has_selection() and self._painter:
+            if self.editor.has_selection() and self._painter:
                 for k, v in self._painter.items():
                     self.editor.set_char(k, v if v not in (None, False) else None)
                 self._painter = None
                 self.status.set_text("")
-                self.editor.disconnect(hid[0])
+                self.editor.off_mouse_up(hid[0])
             return False
-        hid[0] = self.editor.connect_after("button-release-event", released)
+        hid[0] = self.editor.on_mouse_up(released)
+
+    def act_select_all(self):
+        e = self._focus_entry()
+        if e:
+            e.select_region(0, -1)
+        else:
+            self.editor.select_all()
 
     def act_undo(self):
         e = self._focus_entry()
@@ -1306,8 +1324,7 @@ class ComposeWindow(Gtk.Window):
                 model.append([sug])
             if len(model):
                 tv.get_selection().select_path(Gtk.TreePath.new_first())
-            b = ed.buf
-            b.select_range(b.get_iter_at_offset(s_), b.get_iter_at_offset(e_))
+            ed.select_issue(s_, e_)
             state["cur"] = iss[0]
         lab = word
 
@@ -1376,7 +1393,7 @@ class ComposeWindow(Gtk.Window):
         k = ev.keyval
         if self.keytips.active:
             return self.keytips.key(ev)
-        in_body = self.get_focus() is self.editor
+        in_body = self.editor.has_focus_in(self.get_focus())
         if (ctrl and k in (Gdk.KEY_Return, Gdk.KEY_KP_Enter)) or (alt and k in (Gdk.KEY_s, Gdk.KEY_S)):
             self.run("send")
             return True
@@ -1392,7 +1409,8 @@ class ComposeWindow(Gtk.Window):
                 table.update({Gdk.KEY_b: "bold", Gdk.KEY_i: "italic", Gdk.KEY_u: "underline", Gdk.KEY_l: "align:left",
                               Gdk.KEY_e: "align:center", Gdk.KEY_r: "align:right", Gdk.KEY_j: "align:justify",
                               Gdk.KEY_k: "insert-link", Gdk.KEY_z: "undo", Gdk.KEY_y: "redo", Gdk.KEY_space: "clear-formatting",
-                              Gdk.KEY_m: "indent", Gdk.KEY_v: "paste"})
+                              Gdk.KEY_m: "indent", Gdk.KEY_v: "paste", Gdk.KEY_a: "select-all", Gdk.KEY_c: "copy",
+                              Gdk.KEY_x: "cut"})
                 if shift:
                     table = {Gdk.KEY_B: "address-book", Gdk.KEY_L: "bullets", Gdk.KEY_greater: "grow", Gdk.KEY_less: "shrink", Gdk.KEY_M: "outdent",
                              Gdk.KEY_period: "grow", Gdk.KEY_comma: "shrink", Gdk.KEY_V: "paste-text"}

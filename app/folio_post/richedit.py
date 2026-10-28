@@ -561,6 +561,48 @@ class RichEditor(Gtk.TextView):
 
     on_ignore = None
 
+    # ------------------------------------------------------------ the interface compose.py uses (shared with writered.WriterEditor)
+    def connect_changed(self, cb):
+        self.buf.connect("changed", lambda *_: cb())
+
+    def caret_to_start(self):
+        self.buf.place_cursor(self.buf.get_start_iter())
+
+    def select_all(self):
+        self.buf.select_range(self.buf.get_start_iter(), self.buf.get_end_iter())
+
+    def select_offsets(self, a, b):
+        """Select characters a..b of text() (paragraphs count one character each)."""
+        self.buf.select_range(self.buf.get_iter_at_offset(a), self.buf.get_iter_at_offset(b))
+
+    def select_issue(self, so, eo):
+        """Select a word misspelt() found."""
+        self.buf.select_range(self.buf.get_iter_at_offset(so), self.buf.get_iter_at_offset(eo))
+
+    def caret_to_end(self):
+        self.buf.place_cursor(self.buf.get_end_iter())
+
+    def has_selection(self):
+        return self.buf.get_has_selection()
+
+    def has_focus_in(self, w):
+        return w is self
+
+    def copy(self):
+        self.buf.copy_clipboard(Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD))
+
+    def cut(self):
+        self.buf.cut_clipboard(Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD), True)
+
+    def paste(self, plain=False):
+        self.buf.paste_clipboard(Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD), None, True)
+
+    def on_mouse_up(self, cb):
+        return self.connect_after("button-release-event", lambda *_a: cb())
+
+    def off_mouse_up(self, hid):
+        self.disconnect(hid)
+
     # ------------------------------------------------------------ out
     def is_empty(self):
         return not self.text().strip() and not self.images and not self.tables
