@@ -187,6 +187,9 @@ class PostApp(Gtk.Application):
                 pass
             return True
         GObject.add_emission_hook(Gtk.Window, "realize", _own)
+        # X2-04: the same text height on Ubuntu 24.04, whose Carlito has taller line metrics
+        from . import fontfix
+        fontfix.install()
         from . import appearance
         self._dark_css = Gtk.CssProvider()
         self._dark_css.load_from_path(os.path.join(os.path.dirname(__file__), "theme-dark.css"))
