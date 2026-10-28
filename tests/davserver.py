@@ -28,8 +28,10 @@ class World:
         self.users = {}          # user -> (password, {cal id: Cal})
         self.log = []
 
-    def add_user(self, user, password, cals=("personal",)):
+    def add_user(self, user, password, cals=("personal",), books=("contacts",)):
         self.users[user] = (password, {c: Cal(c.capitalize()) for c in cals})
+        self.books = getattr(self, "books", {})
+        self.books[user] = {b: Cal(b.capitalize()) for b in books}
         return self.users[user][1]
 
 
@@ -105,6 +107,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
         cals = self.server.world.users[user][1]
         if len(p) >= 3 and p[0] == "calendars" and p[2] in cals:
             return cals[p[2]], (p[3] if len(p) > 3 else None)
+        books = self.server.world.books.get(user, {})
+        if len(p) >= 3 and p[0] == "addressbooks" and p[2] in books:
+            return books[p[2]], (p[3] if len(p) > 3 else None)
         return None, None
 
     def do_PROPFIND(self):
@@ -120,7 +125,18 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self.send(207, self.ms([self.resp(self.path, "<d:current-user-principal><d:href>/principals/%s/</d:href>"
                                                                 "</d:current-user-principal>" % user)]))
         if p[0] == "principals":
-            return self.send(207, self.ms([self.resp(self.path, "<c:calendar-home-set><d:href>%s</d:href></c:calendar-home-set>" % home)]))
+            return self.send(207, self.ms([self.resp(self.path, "<c:calendar-home-set><d:href>%s</d:href></c:calendar-home-set>"
+                                                     "<card:addressbook-home-set xmlns:card=\"urn:ietf:params:xml:ns:carddav\">"
+                                                     "<d:href>/addressbooks/%s/</d:href></card:addressbook-home-set>" % (home, user))]))
+        if p[0] == "addressbooks" and len(p) == 2:
+            bh = "/addressbooks/%s/" % user
+            out = [self.resp(bh, "<d:resourcetype><d:collection/></d:resourcetype>")]
+            if depth != "0":
+                for bid, b in self.server.world.books.get(user, {}).items():
+                    out.append(self.resp(bh + bid + "/", "<d:resourcetype><d:collection/><card:addressbook xmlns:card="
+                                         "\"urn:ietf:params:xml:ns:carddav\"/></d:resourcetype><d:displayname>%s</d:displayname>"
+                                         "<cs:getctag>%d</cs:getctag>" % (esc(b.name), b.ctag)))
+            return self.send(207, self.ms(out))
         if p[0] == "calendars" and len(p) == 2:
             out = [self.resp(home, "<d:resourcetype><d:collection/></d:resourcetype>")]
             if depth != "0":
@@ -144,14 +160,16 @@ class Handler(http.server.BaseHTTPRequestHandler):
         c, _f = self.item(user, p)
         if c is None:
             return self.send(404)
-        base = "/calendars/%s/%s/" % (user, p[2])
+        base = "/%s/%s/%s/" % (p[0], user, p[2])
+        tag = "c:calendar-data" if p[0] == "calendars" else "card:address-data"
         out = []
-        if "calendar-multiget" in body:
+        if "multiget" in body:
             for h in re.findall(r"<d:href>(.*?)</d:href>", body):
                 f = urllib.parse.unquote(h.replace("&amp;", "&")).rstrip("/").split("/")[-1]
                 if f in c.items:
                     et, data = c.items[f]
-                    out.append(self.resp(base + f, "<d:getetag>%s</d:getetag><c:calendar-data>%s</c:calendar-data>" % (et, esc(data))))
+                    out.append(self.resp(base + f, "<d:getetag>%s</d:getetag><%s xmlns:card=\"urn:ietf:params:xml:ns:carddav\">%s</%s>"
+                                         % (et, tag, esc(data), tag)))
         else:
             for f, (et, _d) in c.items.items():
                 out.append(self.resp(base + urllib.parse.quote(f), "<d:getetag>%s</d:getetag>" % et))
