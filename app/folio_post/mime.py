@@ -203,9 +203,21 @@ def to_bytes(m):
 
 
 def without_bcc(raw):
-    m = parse(raw)
-    del m["Bcc"]
-    return to_bytes(m)
+    """The message as sent: its Bcc line taken out, everything else byte for byte (signatures stay good)."""
+    if isinstance(raw, str):
+        raw = raw.encode()
+    sep = b"\r\n\r\n" if b"\r\n\r\n" in raw else b"\n\n"
+    head, s_, body = raw.partition(sep)
+    nl = b"\r\n" if sep == b"\r\n\r\n" else b"\n"
+    lines = head.split(nl)
+    out, skip = [], False
+    for line in lines:
+        if line[:1] in (b" ", b"\t") and skip:
+            continue
+        skip = line.lower().startswith(b"bcc:")
+        if not skip:
+            out.append(line)
+    return nl.join(out) + s_ + body
 
 
 def recipients(m):

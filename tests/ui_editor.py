@@ -102,6 +102,35 @@ try:
     check("Dear Ann," in t and "x()" not in t, "foreign HTML loads, scripts dropped")
     import re
     check(re.search(r"<b>(<span[^>]*>)?Ann", ed.to_html()[0]) is not None, "strong becomes bold")
+    # tables
+    ed.load_html("<p>Before</p>")
+    b.place_cursor(b.get_end_iter())
+    a = ed.insert_table(2, 3)
+    ed.tables[a][0][0].set_text("Item")
+    ed.tables[a][1][2].set_text("42")
+    h = ed.to_html()[0]
+    check("<table" in h and "<td" in h and ">Item<" in h and ">42<" in h, "a table goes out as an HTML table")
+    check("Item\t\t" in ed.text() and "42" in ed.text(), "and as tab-separated text")
+    ed.load_html(h)
+    check(len(ed.tables) == 1 and list(ed.tables.values())[0][1][2].get_text() == "42", "tables come back in drafts")
+    # spelling
+    try:
+        import enchant
+        sp = enchant.Dict("en_US")
+    except Exception:
+        sp = None
+    if sp is not None:
+        ed.load_html("<p>This sentense has a mistake and an adress.</p>")
+        ed.set_speller(sp)
+        bad = [w for _s, _e, w in ed.misspelt()]
+        check(bad == ["sentense", "adress"], "misspelt words found: %s" % bad)
+        check(any(t is ed._misspelt for t in b.get_iter_at_offset(6).get_tags()), "underlined")
+        s0, e0, w0 = ed.misspelt()[0]
+        check("sentence" in ed.suggest(w0), "suggestions")
+        ed.replace_range(s0, e0, "sentence")
+        check("This sentence has" in ed.text(), "a suggestion replaces the word")
+        ed.ignore("adress")
+        check(ed.misspelt() == [], "Ignore All")
 except Exception:
     traceback.print_exc()
     FAILS.append("exception")

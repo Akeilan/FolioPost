@@ -33,7 +33,7 @@ def build_cal_ribbon(win, r):
             ("From Internet...", "open-calendar-internet"), ("From a Calendar Server (CalDAV)...", "open-calendar-server"),
             ("Google Calendar of an Account", "add-google-calendar"), ("From File...", "open-calendar-file"), None,
             ("Create New Blank Calendar...", "new-calendar")]),
-        [B.small("Calendar Groups", "p-folder", na("Calendar Groups"), "G")],
+        [B.small("Calendar Groups", "p-folder", None, "G", menu=lambda: win.calendar_groups_menu())],
     ])
     B.group(t, "Share", [[B.small("E-mail Calendar", "p-new-email", "email-calendar", "E"),
                           B.small("Publish Online", "p-send-all", "out-of-scope:Publish Online", "PO")]])
@@ -521,6 +521,39 @@ class CalendarCommands:
         acc = self.current_account()
         return self.app.compose(account=acc["id"] if acc else None, subject="Calendar", body_text=text,
                                 attach_data=[("calendar.ics", "text/calendar", ics.encode())])
+
+    def calendar_groups_menu(self):
+        groups = self.store.get("calendar-groups", {}) or {}
+        return [(n, "calendar-group:" + n) for n in sorted(groups)] + [None, ("Save as New Calendar Group...", "save-calendar-group"),
+                                                                       ("Show All Calendars", "calendar-group:"),
+                                                                       ("Delete Calendar Group...", "delete-calendar-group")]
+
+    def act_save_calendar_group(self, name=None):
+        if name is None:
+            name = self.dialogs.ask_text("New Calendar Group", "Name the group of the calendars shown now:")
+        if not name:
+            return None
+        groups = self.store.get("calendar-groups", {}) or {}
+        groups[name] = [c["id"] for c in self.store.calendars() if c["shown"]]
+        self.store.put("calendar-groups", groups)
+        return name
+
+    def act_calendar_group(self, name=""):
+        groups = self.store.get("calendar-groups", {}) or {}
+        ids = groups.get(name) if name else None
+        for c in self.store.calendars():
+            on = (c["id"] in ids) if ids is not None else True
+            if bool(c["shown"]) != on:
+                self.store.update_calendar(c["id"], shown=int(on))
+        self._after_calendars()
+
+    def act_delete_calendar_group(self, name=None):
+        groups = self.store.get("calendar-groups", {}) or {}
+        if name is None:
+            name = self.dialogs.ask_text("Delete Calendar Group", "Name of the group to delete:", sorted(groups)[0] if groups else "")
+        if name in groups:
+            del groups[name]
+            self.store.put("calendar-groups", groups)
 
     def act_update_calendars(self):
         if not self.app.syncer.offline:

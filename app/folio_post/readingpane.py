@@ -221,6 +221,10 @@ class ReadingPane(Gtk.Box):
         self.row = row
         self.raw = raw or b""
         msg = mime.parse(self.raw)
+        self.security = None
+        from . import pgp
+        if pgp.kind(msg):
+            msg, self.security = pgp.open_message(self.raw)
         self.msg = msg
         self.remote = None
         subject = mime.header(msg, "Subject") or "(no subject)"
@@ -261,6 +265,8 @@ class ReadingPane(Gtk.Box):
                 info.append("This message was sent with High importance.")
             if row["categories"]:
                 info.append("Categories: " + row["categories"].replace(",", ", "))
+        if self.security:
+            info.insert(0, self.security + ".")
         if mime.header(msg, "Disposition-Notification-To"):
             info.append("The sender asked for a read receipt.")
         self.info.set_text(" ".join(info))
