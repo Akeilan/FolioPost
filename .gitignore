@@ -2,3 +2,5 @@ __pycache__/
 *.pyc
 out/
 *.deb
+vendor/writer/folio_core.so
+vendor/writer/core/target/

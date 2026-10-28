@@ -166,7 +166,7 @@ try:
     check("Team" in names and "Ann Lee <ann@example.org>" in names, "autocomplete has contacts and groups")
     c.fields["to"].set_text("Team; ")
     c.subject.set_text("Team news")
-    c.editor.buf.insert_at_cursor("Hi all")
+    c.editor.insert_text("Hi all")
     check(c.check_names(), "a group name is a valid recipient")
     c.run("send")
     ok = wait(lambda: any(b"Team news" in r for _f, _r, r in mw.smtp_log), 20)

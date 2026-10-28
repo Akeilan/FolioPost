@@ -82,7 +82,7 @@ try:
     # signed to myself: arrives, checks, and teaches Post my certificate
     c = app.compose(account=aid, to="me@example.org", subject="Signed S/MIME")
     pump(0.3)
-    c.editor.buf.insert_at_cursor("Signed with a certificate.")
+    c.editor.insert_text("Signed with a certificate.")
     c.run("toggle-sign")
     c.run("send")
     ok = wait(lambda: any(b"Signed S/MIME" in r for _f, _r, r in mw.smtp_log), 20)
@@ -98,7 +98,7 @@ try:
     shutil.copyfile(bc, os.path.join(os.environ["FOLIO_POST_SMIME"], "bob@example.org.crt"))
     c = app.compose(account=aid, to="bob@example.org", subject="Encrypted S/MIME")
     pump(0.3)
-    c.editor.buf.insert_at_cursor("Only Bob reads this.")
+    c.editor.insert_text("Only Bob reads this.")
     c.run("toggle-encrypt")
     c.run("send")
     ok = wait(lambda: any(b"Encrypted S/MIME" in r for _f, _r, r in mw.smtp_log), 20)

@@ -16,11 +16,20 @@ Reading Pane, and Outlook's keyboard shortcuts. Part of the Folio suite.
   server at the next Send/Receive, new mail waits in the Outbox.
 - **Safe reading:** HTML mail is shown by Post's own renderer: no scripts, no remote pictures until you
   allow them, tracking pixels dropped.
+- **Writing mail in Folio Writer's editor:** the message is laid out by Writer's own document engine
+  (fonts, styles, lists, tables, pictures, links, spelling marks), the way Outlook writes mail in Word, and
+  goes out as HTML with a plain-text part. Writer's engine is vendored in `vendor/writer` by
+  `tools/sync_writer.sh`; when it can't load, Post's own editor is used (`FOLIO_POST_EDITOR=simple` asks for it).
+- **The desktop's mail app:** `mailto:` links open a new message (`folio-post --make-default`), and the other
+  Folio apps' File › Send in email opens one with the file attached (`folio-post --attach FILE...`).
 - **No cloud of its own**, no account with us, no telemetry.
 
 ## Build and test
 
-    sh build-deb.sh out/                       # folio-post_<version>_all.deb
+    sh tools/sync_writer.sh                    # Writer's editor from ../folio-writer (WRITER_REF=commit)
+    (cd vendor/writer/core && ./build-jammy.sh) && cp vendor/writer/core/target/release/libfolio_core.so vendor/writer/folio_core.so
+    sh build-deb.sh out/                       # folio-post_<version>_amd64.deb
+    sh tests/theme_run.sh                      # dark and coloured desktop themes (X2-01)
     sh tests/run_ui.sh ui_mail.py              # UI test on an X display (Xvfb works)
     sh tests/run_ui.sh command_walk.py         # every ribbon command
     python3 tests/test_engine.py               # store, MIME, HTML, IMAP/SMTP sync

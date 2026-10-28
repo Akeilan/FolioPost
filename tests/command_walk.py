@@ -203,9 +203,8 @@ for k in range(2):
             c = app.compose(account=aid, to="me@example.org", subject="walk")
             pump(0.1)
         answer[0] = (Gtk.ResponseType.OK, Gtk.ResponseType.CANCEL)[k]
-        c.editor.buf.insert_at_cursor("text ")
-        b = c.editor.buf
-        b.select_range(b.get_start_iter(), b.get_iter_at_offset(4))
+        c.editor.insert_text("text ")
+        c.editor.select_offsets(0, 4)
         try:
             c.run(cmd)
         except Exception:

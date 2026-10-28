@@ -1,0 +1,419 @@
+/* Folio Writer — window chrome. Light theme; dark overrides at the end. */
+@define-color theme_selected_bg_color #2e6b3f;
+@define-color selected_bg_color #2e6b3f;
+@define-color accent_color #2e6b3f;
+@define-color accent_bg_color #2e6b3f;
+@define-color accent #2e6b3f;
+@define-color accent_dark #1f4d2c;
+@define-color title_bg #2e6b3f;
+@define-color title_fg #ffffff;
+@define-color ribbon_bg #f3f3f3;
+@define-color ribbon_fg #262626;
+@define-color ribbon_line #d6d6d6;
+@define-color caption_fg #666666;
+@define-color hover_bg #e1e1e1;
+@define-color press_bg #c8c8c8;
+@define-color checked_bg #c8dccb;
+@define-color canvas_bg #e6e6e6;
+@define-color status_bg #f3f3f3;
+@define-color status_fg #444444;
+@define-color backstage_bg #ffffff;
+@define-color backstage_nav #2e6b3f;
+
+/* ---------- chrome typeface: compact, like a desktop office suite ---------- */
+.folio-ribbon, .folio-tabs, .folio-status, .folio-titlebar, .folio-backstage,
+.folio-pane, .folio-dialog, .folio-eqbar, popover, menu, .folio-menu {
+  font-family: "Segoe UI", "Noto Sans", "Open Sans", "Ubuntu", sans-serif;
+  font-size: 9pt;
+}
+.folio-tab { font-size: 9.5pt; }
+
+/* ---------- title bar ---------- */
+.folio-titlebar {
+  background: @title_bg;
+  color: @title_fg;
+  min-height: 34px;
+  padding: 0 4px;
+  border: none;
+  box-shadow: none;
+}
+.folio-titlebar label.title { color: @title_fg; font-weight: normal; }
+.folio-titlebar button {
+  background: transparent; border: none; box-shadow: none; color: @title_fg;
+  border-radius: 0; min-height: 30px; min-width: 30px; padding: 0 4px;
+}
+.folio-titlebar button:hover { background: alpha(#ffffff, 0.15); }
+.folio-titlebar button:active { background: alpha(#ffffff, 0.25); }
+.folio-titlebar button.titlebutton.close:hover { background: #e81123; }
+.folio-titlebar entry.folio-search {
+  background: alpha(#ffffff, 0.18); color: @title_fg; border: 1px solid alpha(#ffffff, 0.25);
+  border-radius: 4px; min-height: 24px; padding: 0 8px; box-shadow: none;
+}
+.folio-titlebar entry.folio-search:focus { background: #ffffff; color: #222222; }
+.folio-titlebar image { color: @title_fg; }
+
+/* ---------- ribbon tabs ---------- */
+.folio-tabs { background: @ribbon_bg; padding: 0 6px; }
+.folio-tab {
+  background: transparent; border: none; box-shadow: none; border-radius: 0;
+  color: @ribbon_fg; padding: 6px 10px 4px 10px; min-height: 22px;
+  border-bottom: 3px solid transparent;
+}
+.folio-tab:hover { background: @hover_bg; }
+.folio-tab.active { border-bottom: 3px solid @accent; color: @accent; font-weight: bold; }
+.folio-tab.file { color: @ribbon_fg; }
+.folio-tab.contextual { color: #8a4a00; }
+
+/* ---------- ribbon body ---------- */
+.folio-ribbon {
+  background: @ribbon_bg; color: @ribbon_fg;
+  border-bottom: 1px solid @ribbon_line;
+  padding: 2px 4px 0 4px;
+}
+.folio-group { padding: 2px 4px 0 4px; }
+.folio-caption { color: @caption_fg; font-size: 0.85em; padding: 1px 0 3px 0; }
+.folio-sep { background: @ribbon_line; min-width: 1px; margin: 6px 2px 6px 2px; }
+.folio-launcher { padding: 0 2px; min-height: 0; min-width: 0; }
+
+.folio-btn {
+  background: transparent; border: 1px solid transparent; box-shadow: none;
+  border-radius: 3px; color: @ribbon_fg; padding: 1px 3px; min-height: 22px; min-width: 22px;
+}
+.folio-btn:hover { background: @hover_bg; border-color: @hover_bg; }
+.folio-btn:active { background: @press_bg; }
+.folio-btn:checked, .folio-btn.checked { background: @checked_bg; border-color: #9cc3a4; }
+.folio-btn:disabled { opacity: 0.45; }
+.folio-btn.large { padding: 3px 4px 2px 4px; min-width: 44px; }
+.folio-btn.large label { font-size: 0.92em; }
+.folio-btn.small label { font-size: 0.92em; }
+.folio-btn.arrow { padding: 0 1px; min-width: 12px; }
+.folio-split { border-radius: 3px; }
+.folio-split:hover { box-shadow: inset 0 0 0 1px @hover_bg; }
+
+.folio-combo entry, .folio-combo button {
+  min-height: 22px; padding-top: 0; padding-bottom: 0; border-radius: 2px;
+}
+.folio-combo entry { background: #ffffff; }
+
+/* style gallery */
+.folio-gallery { background: #ffffff; border: 1px solid @ribbon_line; }
+.folio-style {
+  background: #ffffff; border: 1px solid transparent; border-radius: 0;
+  box-shadow: none; padding: 2px 6px; min-width: 84px; min-height: 54px;
+}
+.folio-style:hover { border-color: #9cc3a4; background: #f2f8f3; }
+.folio-style.current { border-color: @accent; background: #e6f1e8; }
+.folio-style label.name { font-size: 0.8em; color: @caption_fg; }
+.folio-styleset { border: none; background: transparent; }
+.folio-styleset .folio-style { min-width: 0; min-height: 0; padding: 2px;
+  border: 1px solid #d4d4d4; margin: 1px; }
+.folio-styleset .folio-style:hover { border-color: #9cc3a4; }
+.folio-styleset .folio-style.current { border: 2px solid @accent; }
+
+/* ---------- document canvas ---------- */
+.folio-canvas { background: @canvas_bg; }
+
+/* ---------- status bar ---------- */
+.folio-status { background: @status_bg; color: @status_fg; border-top: 1px solid @ribbon_line;
+  padding: 0 8px; min-height: 24px; font-size: 0.88em; }
+.folio-status button { background: transparent; border: none; box-shadow: none; border-radius: 2px;
+  padding: 0 6px; min-height: 20px; color: @status_fg; }
+.folio-status button:hover { background: @hover_bg; }
+.folio-status button:checked { background: @checked_bg; }
+.folio-status scale { min-width: 110px; padding: 0; }
+
+/* ---------- KeyTips ---------- */
+.folio-keytip {
+  background: #3a3a3a; color: #ffffff; font-weight: bold; font-size: 0.8em;
+  padding: 0 4px; border-radius: 2px; border: 1px solid #222222;
+}
+
+/* ---------- backstage (File) ---------- */
+.folio-backstage { background: @backstage_bg; }
+.folio-bs-nav { background: @backstage_nav; padding-top: 6px; padding-bottom: 8px; }
+.folio-bs-navbtn {
+  background: transparent; color: #ffffff; border: none; box-shadow: none; border-radius: 0;
+  padding: 9px 22px; min-height: 22px; font-size: 1.04em;
+}
+.folio-bs-navbtn label { color: #ffffff; }
+.folio-bs-navbtn image { color: #ffffff; }
+.folio-bs-navbtn.back { padding: 12px 18px; }
+.folio-bs-navbtn:hover { background: alpha(#ffffff, 0.14); }
+.folio-bs-navbtn.active { background: alpha(#000000, 0.25); }
+.folio-bs-sep { background: alpha(#ffffff, 0.30); min-height: 1px; margin: 4px 20px; }
+.folio-bs-body { background: #ffffff; }
+.folio-bs-title { font-size: 2.15em; font-weight: 300; color: #262626; margin-bottom: 8px; }
+.folio-bs-cardtitle { font-size: 1.18em; font-weight: 600; color: #262626; padding-top: 6px; }
+.folio-bs-docname { font-size: 1.5em; font-weight: 300; }
+.folio-bs-tile { background: transparent; border: 1px solid transparent; border-radius: 0;
+  box-shadow: none; padding: 6px; }
+.folio-bs-tile:hover { background: #f3f8f4; border-color: #c5dfcb; }
+.folio-bs-thumb { background: #ffffff; border: 1px solid #c8c8c8;
+  box-shadow: 0 1px 3px alpha(#000000, 0.18); }
+.folio-bs-list { background: transparent; }
+.folio-bs-list row { padding: 2px 6px; border-radius: 0; }
+.folio-bs-list row:hover { background: #edf5ef; }
+.folio-bs-filename { font-weight: 600; }
+.folio-bs-place { background: transparent; border: 1px solid transparent; box-shadow: none;
+  border-radius: 0; padding: 8px 12px; }
+.folio-bs-place:hover { background: #edf5ef; }
+.folio-bs-card { padding: 10px 0; }
+.folio-bs-card button { background: #ffffff; border: 1px solid #c8c8c8; border-radius: 2px;
+  box-shadow: none; }
+.folio-bs-card button:hover { background: #e8f2ea; border-color: #a6cdae; }
+.folio-bs-propentry { background: transparent; border: 1px solid transparent; box-shadow: none;
+  padding: 0 2px; min-height: 22px; }
+.folio-bs-propentry:hover, .folio-bs-propentry:focus { border-color: #c8c8c8; background: #ffffff; }
+.folio-bs-preview { background: #e8e8e8; border-left: 1px solid #d6d6d6; }
+.folio-bs-printbtn { background: #ffffff; border: 1px solid #c8c8c8; border-radius: 2px; }
+.folio-bs-printbtn:hover { background: #e8f2ea; border-color: #a6cdae; }
+.folio-backstage combobox button, .folio-backstage entry { border-radius: 2px; }
+.folio-backstage button.suggested-action { background: @accent; color: #ffffff;
+  border-color: @accent_dark; }
+.folio-backstage link, .folio-backstage button.link { color: @accent; }
+
+/* ---------- task panes ---------- */
+.folio-pane-slot { background: #ffffff; }
+.folio-pane { background: #ffffff; border-left: 1px solid @ribbon_line;
+  border-right: 1px solid @ribbon_line; padding: 4px 10px 10px 10px; }
+.folio-pane-title { font-size: 1.3em; padding: 6px 0 4px 0; color: #262626; }
+.folio-pane treeview { background: #ffffff; }
+.folio-pane treeview:selected { background: #cde4d2; color: #1a1a1a; }
+.folio-pane list, .folio-pane list row { background: #ffffff; }
+.folio-pane list row:hover { background: #edf5ef; }
+.folio-pane button { border-radius: 2px; }
+.folio-navtabs button { background: transparent; border: none; border-bottom: 3px solid transparent;
+  border-radius: 0; box-shadow: none; padding: 4px 6px; }
+.folio-navtabs button:checked { border-bottom-color: @accent; color: @accent; background: transparent; }
+.folio-editor-word { font-size: 1.25em; padding: 6px 0; }
+.folio-comment-card { border-left: 3px solid @accent; margin: 4px 0; background: #f6faf7; }
+
+/* ---------- dialogs ---------- */
+.folio-dialog { background: #f3f3f3; color: #262626; }
+/* our light surfaces keep dark text whatever the desktop theme's text colour */
+.folio-dialog label, .folio-dialog checkbutton, .folio-dialog radiobutton,
+.folio-dialog checkbutton label, .folio-dialog radiobutton label, .folio-dialog notebook tab label,
+.folio-dialog frame > label, .folio-dialog expander,
+.folio-pane, .folio-pane label, .folio-pane checkbutton label, .folio-pane radiobutton label,
+.folio-backstage, .folio-backstage label, .folio-eqbar, .folio-eqbar label { color: #262626; }
+.folio-dialog label:disabled, .folio-pane label:disabled, .folio-backstage label:disabled { color: #8a8a8a; }
+.folio-dialog entry, .folio-dialog spinbutton entry, .folio-dialog textview text, .folio-dialog treeview,
+.folio-pane entry, .folio-pane textview text, .folio-pane treeview { color: #1a1a1a; background-color: #ffffff; }
+.folio-dialog entry selection, .folio-pane entry selection { background-color: #2e6b3f; color: #ffffff; }
+.folio-dialog button { background-image: none; background-color: #fdfdfd; border: 1px solid #c8c8c8;
+  color: #262626; box-shadow: none; text-shadow: none; }
+.folio-dialog button:hover { background-color: #e8f1ea; border-color: #9cc3a4; }
+.folio-dialog button label { color: #262626; }
+.folio-dialog button.folio-default, .folio-dialog button.suggested-action {
+  background-color: @accent; border-color: @accent_dark; color: #ffffff; }
+.folio-dialog button.folio-default:hover, .folio-dialog button.suggested-action:hover { background-color: @accent_dark; }
+.folio-dialog .folio-default label, .folio-dialog .suggested-action label { color: #ffffff; }
+.folio-dialog notebook header { background: #f3f3f3; border-bottom-color: #d6d6d6; }
+.folio-dialog notebook tab { padding: 4px 12px; min-height: 22px; }
+.folio-dialog notebook tab:checked { box-shadow: inset 0 -2px @accent; }
+.folio-dialog notebook stack { background: #f3f3f3; }
+.folio-dialog spinbutton button { min-width: 16px; padding: 0 2px; min-height: 0; }
+.folio-dialog spinbutton entry, .folio-dialog entry { min-height: 24px; padding-top: 0;
+  padding-bottom: 0; border-radius: 2px; }
+.folio-dialog button { min-height: 24px; padding: 2px 14px; border-radius: 2px; }
+.folio-dialog combobox button { padding: 2px 8px; }
+.folio-default, button.folio-default { background-image: none; background-color: @accent;
+  color: #ffffff; border: 1px solid @accent_dark; min-width: 72px; }
+.folio-default:hover { background-color: @accent_dark; }
+.folio-default label { color: #ffffff; }
+.folio-dialog treeview { background: #ffffff; }
+.folio-dialog treeview:selected { background: #cde4d2; color: #1a1a1a; }
+.folio-linkbar radiobutton, .folio-linkbar button { min-width: 92px; min-height: 64px;
+  border-radius: 0; }
+.folio-charmap { background: #ffffff; }
+.folio-charmap:selected { background: @accent; color: #ffffff; }
+.folio-symbol { min-width: 26px; min-height: 26px; padding: 0; border-radius: 0;
+  font-size: 1.2em; background: #ffffff; border: 1px solid #dcdcdc; box-shadow: none; }
+.folio-symbol:hover { background: #e8f2ea; border-color: #a6cdae; }
+.folio-popover-title { font-weight: 600; padding: 2px 4px; }
+.folio-gallery-head { background: #ececec; padding: 3px 6px; color: #444444; }
+.folio-eq-item { border-radius: 0; padding: 4px; border: 1px solid transparent; }
+.folio-eq-item:hover { background: #e8f2ea; border-color: #a6cdae; }
+.folio-menu menuitem { padding: 4px 14px 4px 6px; }
+
+/* ---------- swatches, grids ---------- */
+.folio-swatch { min-width: 16px; min-height: 16px; padding: 0; border-radius: 0;
+  border: 1px solid alpha(#000000, 0.15); box-shadow: none; }
+.folio-swatch:hover { border-color: #e06b00; }
+.folio-gridcell { min-width: 16px; min-height: 16px; padding: 0; border-radius: 0;
+  background: #ffffff; border: 1px solid #c8c8c8; box-shadow: none; }
+.folio-gridcell.on { background: #f7d9a3; border-color: #e09a2b; }
+
+/* ---------- equation bar ---------- */
+.folio-eqbar { background: #fbfbfb; border-bottom: 1px solid @ribbon_line; padding: 4px 8px; }
+.folio-eq-entry { font-family: "Latin Modern Math", "DejaVu Math TeX Gyre", serif;
+  font-size: 1.15em; min-height: 28px; border-radius: 2px; }
+.folio-eq-error { color: #a4262c; font-size: 0.85em; padding-left: 36px; }
+
+/* ---------- Office themes ---------- */
+.theme-darkgray .folio-ribbon, .theme-darkgray .folio-tabs, .theme-darkgray .folio-status
+  { background: #444444; color: #f0f0f0; }
+.theme-darkgray .folio-btn, .theme-darkgray .folio-tab, .theme-darkgray .folio-caption,
+.theme-darkgray .folio-status button { color: #f0f0f0; }
+.theme-darkgray .folio-btn:hover, .theme-darkgray .folio-tab:hover { background: #5a5a5a; }
+.theme-darkgray .folio-canvas { background: #666666; }
+.theme-darkgray .folio-titlebar { background: #262626; }
+.theme-black .folio-ribbon, .theme-black .folio-tabs, .theme-black .folio-status
+  { background: #262626; color: #f0f0f0; }
+.theme-black .folio-btn, .theme-black .folio-tab, .theme-black .folio-caption,
+.theme-black .folio-status button { color: #f0f0f0; }
+.theme-black .folio-btn:hover, .theme-black .folio-tab:hover { background: #3c3c3c; }
+.theme-black .folio-canvas { background: #1f1f1f; }
+.theme-black .folio-titlebar { background: #000000; }
+.theme-white .folio-titlebar { background: #ffffff; color: #262626; }
+.theme-white .folio-titlebar label.title, .theme-white .folio-titlebar button { color: #262626; }
+.theme-white .folio-ribbon, .theme-white .folio-tabs { background: #ffffff; }
+
+popover.folio-keytip-pop { padding: 0; border: none; background: transparent; box-shadow: none; }
+
+/* ---------- comment balloons ---------- */
+.folio-balloon { background: #ffffff; border: 1px solid #d4d4d4; border-left: 3px solid #c0504d;
+  border-radius: 3px; padding: 6px 8px; box-shadow: 0 1px 3px alpha(#000000, 0.15); }
+.folio-balloon.active { border-color: #2e6b3f; border-left-color: #2e6b3f; }
+.folio-balloon.resolved { opacity: 0.6; }
+.folio-balloon.revision { border-left-color: #b0141c; padding: 3px 6px; }
+.folio-avatar { background: #c0504d; color: #ffffff; border-radius: 12px; min-width: 24px;
+  min-height: 24px; font-size: 0.8em; font-weight: bold; }
+.folio-balloon-btn { padding: 0 6px; min-height: 20px; font-size: 0.85em; color: #2e6b3f; }
+
+.folio-titlebar button.folio-qat-arrow { min-width: 14px; padding: 0 1px; }
+.folio-undo-sel { background: #c8dccb; }
+
+.folio-status button.folio-proof-errors image { color: #c00000; }
+
+/* compact spin boxes on the ribbon */
+.folio-ribbon spinbutton { min-height: 20px; }
+.folio-ribbon spinbutton entry { min-height: 20px; padding: 0 4px; }
+.folio-ribbon spinbutton button { min-width: 14px; min-height: 18px; padding: 0 1px;
+  border: none; background: transparent; box-shadow: none; }
+.folio-ribbon spinbutton button:hover { background: @hover_bg; }
+.folio-ribbon spinbutton button image { -gtk-icon-transform: scale(0.65); }
+
+.folio-ruler { background: #f3f3f3; }
+
+/* Paste Options button */
+.folio-pasteopts { background: #ffffff; border: 1px solid #c8c8c8; border-radius: 2px;
+  padding: 0 3px; min-height: 18px; box-shadow: 0 1px 2px rgba(0,0,0,0.15); }
+.folio-pasteopts label { font-size: 0.85em; }
+.folio-pasteopts:hover { background: #f2f8f3; border-color: #9cc3a4; }
+
+/* ScreenTips */
+tooltip, tooltip.background { background-color: #ffffff; color: #262626;
+  border: 1px solid #c6c6c6; border-radius: 0; box-shadow: 1px 2px 4px rgba(0,0,0,0.18); }
+tooltip label { color: #262626; padding: 3px 4px; font-size: 9pt;
+  font-family: "Segoe UI", "Noto Sans", "Open Sans", "Ubuntu", sans-serif; }
+tooltip * { background-color: transparent; }
+
+.folio-layoutopts { background: #ffffff; border: 1px solid #c8c8c8; border-radius: 2px;
+  padding: 2px; min-height: 0; min-width: 0; box-shadow: 0 1px 2px rgba(0,0,0,0.15); }
+.folio-layoutopts:hover { background: #f2f8f3; border-color: #9cc3a4; }
+
+/* message bar (Marked as Final, autosaved versions) */
+.folio-msgbar { background: #fff4ce; border-bottom: 1px solid #e1d3a0; padding: 4px 12px;
+  min-height: 30px; }
+.folio-msgbar label { color: #323130; }
+.folio-msgbar button { padding: 1px 10px; background: #ffffff; border: 1px solid #c8c8c8;
+  border-radius: 2px; }
+.folio-pin { padding: 2px; min-width: 0; min-height: 0; opacity: 0.0; }
+.folio-bs-list row:hover .folio-pin, .folio-pin.pinned { opacity: 1.0; }
+
+/* Read Aloud player */
+.folio-readaloud { background: #ffffff; border: 1px solid #c8c8c8; border-radius: 4px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.18); padding: 2px; }
+/* Outline view */
+.folio-outline { font-size: 11pt; }
+.folio-outline:selected { background: #cfe7d4; color: #000; }
+
+/* ---------- equation symbol gallery ---------- */
+.folio-symgallery { margin-top: 2px; }
+.folio-symcell { min-width: 22px; min-height: 22px; padding: 0; margin: 0; border-radius: 0;
+  border: 1px solid transparent; background: #ffffff; box-shadow: none;
+  font-family: "Latin Modern Math", "DejaVu Serif", serif; font-size: 13px; }
+.folio-symcell:hover { background: #e8f2ea; border-color: #a6cdae; }
+.folio-gallery-side { border-left: 1px solid @ribbon_line; }
+.folio-gallery-arrow { min-width: 14px; min-height: 18px; padding: 0 1px; border-radius: 0; }
+.folio-symcat { margin: 1px; }
+
+/* ---------- resume reading ---------- */
+.folio-resume { background: #ffffff; border: 1px solid #c6c6c6; border-radius: 0;
+  box-shadow: 1px 2px 6px rgba(0,0,0,0.2); padding: 8px 12px; }
+.folio-resume:hover { background: #f2f8f3; border-color: #9cc3a4; }
+
+/* ---------- full-screen mode bar ---------- */
+.folio-autohide { background: @title_bg; }
+.folio-autohide button, .folio-autohide button label { color: @title_fg; padding: 0 8px;
+  min-height: 0; font-size: 8pt; }
+.folio-autohide button:hover { background: alpha(white, 0.15); }
+
+/* ---------- Read Mode ---------- */
+.folio-readbar { background: #f7f7f7; border-bottom: 1px solid #dddddd; padding: 2px 6px; }
+.folio-readbar button, .folio-readbar button label { color: #333333; font-size: 10pt; }
+.folio-readfoot { background: #f7f7f7; border-top: 1px solid #dddddd; min-height: 24px; }
+.folio-readfoot label { color: #555555; font-size: 9pt; }
+
+/* ---------- search box suggestions ---------- */
+button.folio-search-current { background: alpha(@theme_selected_bg_color, 0.18); }
+/* check boxes and radio buttons on our light dialogs and panes */
+.folio-dialog check:not(:checked):not(:indeterminate), .folio-dialog radio:not(:checked),
+.folio-pane check:not(:checked):not(:indeterminate), .folio-pane radio:not(:checked) {
+  background-image: none; background-color: #ffffff; border: 1px solid #8a8a8a; }
+
+/* ---------- light chrome whatever the desktop theme ----------
+   The ribbon, status bar, galleries, menus and pop-ups are light surfaces: under a dark
+   desktop theme their text, fields, drop-down buttons, spin buttons and check boxes would
+   otherwise take the theme's light text and dark buttons. */
+.folio-ribbon, .folio-tabs, .folio-status, .folio-gallery, .folio-minibar,
+.folio-ribbon label, .folio-tabs label, .folio-status label, .folio-gallery label,
+.folio-style label, .folio-ribbon checkbutton label, .folio-ribbon radiobutton label,
+.folio-ribbon checkbutton, .folio-ribbon radiobutton { color: #262626; }
+.folio-tab.active, .folio-tab.active label { color: @accent; }
+.folio-tab.contextual, .folio-tab.contextual label { color: #8a4a00; }
+.folio-style label.name { color: @caption_fg; }
+.folio-ribbon image, .folio-tabs image, .folio-status image, .folio-gallery image { color: #444444; }
+.folio-ribbon entry, .folio-ribbon spinbutton, .folio-ribbon spinbutton entry,
+.folio-ribbon combobox entry, .folio-combo entry, .folio-minibar entry, .folio-status entry {
+  color: #1a1a1a; background-color: #ffffff; background-image: none; caret-color: #1a1a1a;
+  border: 1px solid #c8c8c8; box-shadow: none; text-shadow: none; }
+.folio-ribbon spinbutton entry, .folio-ribbon combobox entry, .folio-combo entry { border: none; }
+.folio-ribbon entry:focus, .folio-combo entry:focus { border-color: @accent; }
+.folio-ribbon entry:disabled, .folio-ribbon spinbutton:disabled { color: #8a8a8a; background-color: #f6f6f6; }
+.folio-ribbon entry selection, .folio-combo entry selection, .folio-minibar entry selection {
+  background-color: @accent; color: #ffffff; }
+.folio-ribbon combobox button, .folio-combo button, .folio-ribbon spinbutton button,
+.folio-minibar combobox button, .folio-minibar spinbutton button {
+  color: #262626; background-color: #ffffff; background-image: none; border: 1px solid #c8c8c8;
+  box-shadow: none; text-shadow: none; }
+.folio-ribbon combobox button:hover, .folio-combo button:hover, .folio-ribbon spinbutton button:hover,
+.folio-minibar combobox button:hover { background-color: @hover_bg; }
+.folio-ribbon check:not(:checked):not(:indeterminate), .folio-ribbon radio:not(:checked) {
+  background-image: none; background-color: #ffffff; border: 1px solid #8a8a8a; }
+.folio-ribbon check:checked, .folio-ribbon radio:checked {
+  background-image: none; background-color: @accent; border: 1px solid @accent_dark; color: #ffffff; }
+
+/* menus and pop-ups */
+popover, popover.background, menu, .menu, .folio-menu, .context-menu {
+  background-color: #ffffff; background-image: none; color: #262626; border-color: #c6c6c6; }
+popover > contents, popover.background > contents { background-color: #ffffff; color: #262626; }
+popover label, menu label, menuitem label, popover modelbutton, popover check, popover radio,
+popover checkbutton, popover radiobutton { color: #262626; }
+popover image, menu image { color: #444444; }
+popover button { background-image: none; text-shadow: none; box-shadow: none; }
+popover button.flat { background-color: transparent; border-color: transparent; color: #262626; }
+popover button.flat:hover, popover modelbutton:hover { background-color: #e8f1ea; }
+popover button:not(.flat):not(.folio-swatch):not(.suggested-action):not(.folio-default):not(.folio-style) {
+  color: #262626; }
+menu menuitem:hover, .menu menuitem:hover { background-color: #e8f1ea; }
+menu menuitem:hover label { color: #1a1a1a; }
+popover label:disabled, menu menuitem:disabled label, popover button:disabled label { color: #9a9a9a; }
+popover separator, menu separator { background-color: #d6d6d6; color: #d6d6d6; }
+popover entry, popover spinbutton, popover spinbutton entry, popover textview text {
+  color: #1a1a1a; background-color: #ffffff; background-image: none; border: 1px solid #c8c8c8;
+  caret-color: #1a1a1a; }
+popover entry selection { background-color: @accent; color: #ffffff; }
+popover check:not(:checked):not(:indeterminate), popover radio:not(:checked) {
+  background-image: none; background-color: #ffffff; border: 1px solid #8a8a8a; }
