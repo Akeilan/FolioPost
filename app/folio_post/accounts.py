@@ -98,9 +98,10 @@ class AccountDialog(Gtk.Dialog):
         self.account = account
         self.get_style_context().add_class("folio-dialog")
         self.set_default_size(520, -1)
-        self.box = self.get_content_area()
+        # the pages go in a box of their own: the content area also holds the dialog's buttons
+        self.box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
         self.box.set_border_width(18)
-        self.box.set_spacing(8)
+        self.get_content_area().pack_start(self.box, True, True, 0)
         self.result = None
         self.busy = False
         self.cfg = {}
