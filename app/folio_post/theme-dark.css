@@ -108,3 +108,4 @@ menu menuitem:hover { background: #2e2e55; }
 .folio-invitebar { background: #2a2a4a; border-color: #4a4a7a; }
 .folio-folderpane list row:selected, .folio-folderpane list row:selected label { background-color: #2e2e55; color: #f0f0f0; } .folio-folderpane list { background: #1f1f1f; }
 .folio-note, .folio-note text { background-color: #5a5420; color: #f0f0f0; }
+.folio-dialog label, .folio-dialog checkbutton label, .folio-dialog radiobutton label { color: #f0f0f0; } .folio-dialog entry { background-color: #2b2b2b; color: #f0f0f0; border-color: #555555; }

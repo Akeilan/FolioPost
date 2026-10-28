@@ -429,10 +429,16 @@ try:
     from folio_post.accounts import AccountDialog, guess
     check(guess("x@gmail.com")[0] == "gmail" and guess("x@proton.me")[0] == "proton", "provider presets")
     dlg = AccountDialog(win)
+    pump(0.2)
+
+    def buttons_shown(d):
+        return d.ok.get_mapped() and d.cancel.get_mapped() and d.ok.is_ancestor(d)
+    check(buttons_shown(dlg), "Add Account shows its Connect and Cancel buttons")
     dlg.email_entry.set_text("someone@gmail.com")
     dlg.response(Gtk.ResponseType.OK)
     pump(0.2)
     check(dlg.page == "gmail", "Gmail: sign-in choice")
+    check(buttons_shown(dlg) and dlg.back.get_mapped(), "the buttons stay on the next page")
     dlg.response(1)
     pump(0.1)
     dlg.email_entry.set_text("someone@proton.me")
