@@ -112,6 +112,19 @@ def refresh(client_id, client_secret, tokens, provider="google"):
     return t
 
 
+def built_in_client(provider):
+    """share/folio-post/<provider>-client.json: a client ID the package ships with, so nobody has to make one."""
+    import json as _j
+    from . import SHARE
+    for d in (SHARE, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "share")):
+        try:
+            with open(os.path.join(d, "%s-client.json" % provider)) as fh:
+                return _j.load(fh)
+        except (OSError, ValueError):
+            continue
+    return {}
+
+
 class TokenSource:
     """Access tokens for OAuth accounts, refreshed when they run out."""
 
@@ -120,14 +133,18 @@ class TokenSource:
         self.secrets = secrets_
 
     def client(self, provider="google"):
-        if provider == "microsoft":
-            c = self.store.get("microsoft-client", {}) or {}
-            return c.get("id") or os.environ.get("FOLIO_POST_MICROSOFT_CLIENT_ID", ""), ""
-        c = self.store.get("google-client", {}) or {}
-        cid = c.get("id") or os.environ.get("FOLIO_POST_GOOGLE_CLIENT_ID", "")
-        return cid, c.get("secret") or os.environ.get("FOLIO_POST_GOOGLE_CLIENT_SECRET", "")
+        """The OAuth client: one kept in settings, from the environment, or built into the package."""
+        c = self.store.get("%s-client" % provider, {}) or {}
+        env = os.environ.get("FOLIO_POST_%s_CLIENT_ID" % provider.upper(), "")
+        built = built_in_client(provider)
+        cid = c.get("id") or env or built.get("id", "")
+        sec = c.get("secret") or os.environ.get("FOLIO_POST_%s_CLIENT_SECRET" % provider.upper(), "") or built.get("secret", "")
+        return cid, sec
 
     def __call__(self, acc):
+        if acc["config"].get("auth") == "goa":
+            from . import goa
+            return goa.token(acc["config"]["goa_id"])
         raw = self.secrets.get(acc["id"], "oauth")
         if not raw:
             raise RuntimeError("this account needs signing in again")
