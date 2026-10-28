@@ -30,6 +30,9 @@ Cc and Bcc buttons in a message open the Select Names box.
 
 <b>Tasks</b> (Ctrl+4) and <b>Notes</b> (Ctrl+5). Tasks and flagged mail on the To-Do List.
 
+<b>Encrypting and signing.</b> Options &gt; Encrypt and Sign in a message use your GnuPG keys (OpenPGP).
+Encrypted and signed mail you get opens by itself and says whether its signature is good.
+
 <b>Files.</b> File &gt; Open &amp; Export: .eml, .mbox, Outlook .pst and .ost (needs pst-utils), .msg (needs
 libemail-outlook-message-perl), .ics and .vcf.
 """

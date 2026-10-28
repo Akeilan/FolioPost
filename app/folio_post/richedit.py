@@ -28,6 +28,10 @@ class RichEditor(Gtk.TextView):
         self.tags = {}
         self.pending = {}          # formatting typed next, with no selection
         self.images = {}           # anchor -> (cid, type, bytes)
+        self.tables = {}           # anchor -> [[Gtk.Entry]]
+        self.speller = None
+        self.ignored = set()
+        self._spell_timer = None
         self.undo = []
         self.redo_ = []
         self._quiet = False
@@ -40,6 +44,9 @@ class RichEditor(Gtk.TextView):
         self.buf.connect("mark-set", lambda *_: self._notify())
         self.connect("key-press-event", self._key)
         self._base = self.buf.create_tag("base", family=DEFAULT_FONT, size_points=DEFAULT_SIZE)
+        self._misspelt = self.buf.create_tag("misspelt", underline=Pango.Underline.ERROR)
+        self.buf.connect("changed", lambda *_: self._spell_soon())
+        self.connect("populate-popup", self._popup)
 
     # ------------------------------------------------------------ tags
     def tag(self, kind, value=True):
@@ -409,17 +416,172 @@ class RichEditor(Gtk.TextView):
         self.images[anchor] = ("img%s@folio" % uuid.uuid4().hex[:12], ctype, data, pb.get_width())
         return True
 
+    def insert_table(self, rows, cols, cells=None):
+        """A table: a grid of cells inside the text, written out as an HTML table."""
+        self._snapshot()
+        b = self.buf
+        it = b.get_iter_at_mark(b.get_insert())
+        if not it.starts_line():
+            b.insert(it, "\n")
+            it = b.get_iter_at_mark(b.get_insert())
+        anchor = b.create_child_anchor(it)
+        grid = Gtk.Grid()
+        grid.get_style_context().add_class("folio-table")
+        grid.set_column_spacing(0)
+        grid.set_row_spacing(0)
+        entries = []
+        for r in range(rows):
+            row = []
+            for c in range(cols):
+                e = Gtk.Entry()
+                e.set_width_chars(12)
+                e.set_has_frame(True)
+                e.get_style_context().add_class("folio-cell")
+                if cells and r < len(cells) and c < len(cells[r]):
+                    e.set_text(cells[r][c])
+                e.connect("changed", lambda *_: self.buf.emit("changed"))
+                grid.attach(e, c, r, 1, 1)
+                row.append(e)
+            entries.append(row)
+        grid.show_all()
+        self.add_child_at_anchor(grid, anchor)
+        self.tables[anchor] = entries
+        it = b.get_iter_at_child_anchor(anchor)
+        it.forward_char()
+        b.insert(it, "\n")
+        return anchor
+
     def insert_text(self, text):
         b = self.buf
         b.insert_at_cursor(text)
 
+    # ------------------------------------------------------------ spelling
+    def set_speller(self, sp, ignored=()):
+        self.speller = sp
+        self.ignored = set(ignored)
+        self.check_spelling()
+
+    def _spell_soon(self):
+        if self.speller is None:
+            return
+        if self._spell_timer:
+            GLib.source_remove(self._spell_timer)
+        self._spell_timer = GLib.timeout_add(500, self.check_spelling)
+
+    def misspelt(self):
+        """[(start offset, end offset, word)] of the words the dictionary doesn't know."""
+        if self.speller is None:
+            return []
+        b = self.buf
+        text = b.get_text(b.get_start_iter(), b.get_end_iter(), True)
+        out = []
+        for m in re.finditer(r"[A-Za-zÀ-ɏ]+(?:'[A-Za-z]+)?", text):
+            w = m.group(0)
+            if len(w) < 2 or w.isupper() or w.lower() in self.ignored or w in self.ignored:
+                continue
+            # links and addresses are not words
+            pre = text[max(0, m.start() - 1):m.start()]
+            post = text[m.end():m.end() + 1]
+            if pre in "@./:" and pre or post in ("@", "/") and post:
+                continue
+            try:
+                ok = self.speller.check(w)
+            except Exception:
+                ok = True
+            if not ok:
+                out.append((m.start(), m.end(), w))
+        return out
+
+    def check_spelling(self):
+        self._spell_timer = None
+        b = self.buf
+        b.remove_tag(self._misspelt, b.get_start_iter(), b.get_end_iter())
+        for s, e, _w in self.misspelt():
+            b.apply_tag(self._misspelt, b.get_iter_at_offset(s), b.get_iter_at_offset(e))
+        return False
+
+    def word_at(self, it):
+        if not it.has_tag(self._misspelt):
+            return None
+        s, e = it.copy(), it.copy()
+        if not s.starts_tag(self._misspelt):
+            s.backward_to_tag_toggle(self._misspelt)
+        e.forward_to_tag_toggle(self._misspelt)
+        return s, e
+
+    def _popup(self, view, menu):
+        if self.speller is None:
+            return
+        x, y = self.get_pointer()
+        bx, by = self.window_to_buffer_coords(Gtk.TextWindowType.WIDGET, x, y)
+        ok, it = self.get_iter_at_location(bx, by)
+        if not ok:
+            return
+        r = self.word_at(it)
+        if r is None:
+            return
+        s, e = r
+        word = self.buf.get_text(s, e, False)
+        menu.prepend(Gtk.SeparatorMenuItem())
+        so, eo = s.get_offset(), e.get_offset()
+        for label, fn in ([("Ignore All", lambda *_: self.ignore(word)), ("Add to Dictionary", lambda *_: self.learn(word))] +
+                          [(sug, (lambda *_a, sg=sug: self.replace_range(so, eo, sg))) for sug in self.suggest(word)[:6][::-1]]):
+            mi = Gtk.MenuItem(label=label)
+            mi.connect("activate", fn)
+            menu.prepend(mi)
+        menu.show_all()
+
+    def suggest(self, word):
+        try:
+            return list(self.speller.suggest(word))
+        except Exception:
+            return []
+
+    def replace_range(self, so, eo, text):
+        self._snapshot()
+        b = self.buf
+        s, e = b.get_iter_at_offset(so), b.get_iter_at_offset(eo)
+        tags = [t for t in s.get_tags() if t is not self._misspelt]
+        b.delete(s, e)
+        s = b.get_iter_at_offset(so)
+        b.insert_with_tags(s, text, *tags) if tags else b.insert(s, text)
+        self.check_spelling()
+
+    def ignore(self, word):
+        self.ignored.add(word.lower())
+        if self.on_ignore:
+            self.on_ignore(word, False)
+        self.check_spelling()
+
+    def learn(self, word):
+        self.ignored.add(word.lower())
+        if self.on_ignore:
+            self.on_ignore(word, True)
+        self.check_spelling()
+
+    on_ignore = None
+
     # ------------------------------------------------------------ out
     def is_empty(self):
-        return not self.text().strip() and not self.images
+        return not self.text().strip() and not self.images and not self.tables
 
     def text(self):
         b = self.buf
-        return b.get_text(b.get_start_iter(), b.get_end_iter(), False).replace("￼", "")
+        out = []
+        it = b.get_start_iter()
+        end = b.get_end_iter()
+        while it.compare(end) < 0:
+            nxt = it.copy()
+            if not nxt.forward_find_char(lambda ch, _d: ch == "\ufffc", None, end):
+                nxt = end.copy()
+            out.append(b.get_text(it, nxt, False).replace("\ufffc", ""))
+            if nxt.compare(end) < 0:
+                a = nxt.get_child_anchor()
+                if a in self.tables:
+                    out.append("\n".join("\t".join(e.get_text() for e in row) for row in self.tables[a]))
+                nxt.forward_char()
+            it = nxt
+        return "".join(out)
 
     def to_html_raw(self):
         return self.to_html(inline_data=True)[0]
@@ -471,6 +633,14 @@ class RichEditor(Gtk.TextView):
         while it.compare(e) < 0:
             anchor = it.get_child_anchor()
             if anchor is not None:
+                if anchor in self.tables:
+                    rows = self.tables[anchor]
+                    out.append('<table border="1" cellspacing="0" cellpadding="4" style="border-collapse:collapse;'
+                               'border:1px solid #999999">' + "".join(
+                                   "<tr>" + "".join('<td style="border:1px solid #999999">%s</td>' % (html.escape(e.get_text()) or "&nbsp;")
+                                                    for e in row) + "</tr>" for row in rows) + "</table>")
+                    it.forward_char()
+                    continue
                 if anchor in self.images:
                     cid, ctype, data, w = self.images[anchor]
                     src = ("data:%s;base64,%s" % (ctype, base64.b64encode(data).decode())) if inline_data else "cid:" + cid
@@ -525,6 +695,7 @@ class RichEditor(Gtk.TextView):
         self._quiet = True
         self.buf.set_text("")
         self.images = {}
+        self.tables = {}
         p = _Loader(self)
         try:
             p.feed(text)
@@ -592,6 +763,7 @@ class _Loader(HTMLParser):
         self.at_cursor = at_cursor
         self.started = False
         self.skip = 0
+        self.table = None          # rows of cell texts while inside a <table>
 
     def _it(self):
         return self.b.get_iter_at_mark(self.b.get_insert()) if self.at_cursor else self.b.get_end_iter()
@@ -628,6 +800,17 @@ class _Loader(HTMLParser):
 
     def handle_starttag(self, tag, attrs):
         a = dict(attrs)
+        if tag == "table" and self.table is None and not self.at_cursor:
+            self.table = []
+            return
+        if self.table is not None:
+            if tag == "tr":
+                self.table.append([])
+            elif tag in ("td", "th"):
+                if not self.table:
+                    self.table.append([])
+                self.table[-1].append("")
+            return
         if tag in ("style", "script", "head", "title"):
             self.skip += 1
             return
@@ -693,6 +876,17 @@ class _Loader(HTMLParser):
         self.stack.append((tag, props))
 
     def handle_endtag(self, tag):
+        if self.table is not None:
+            if tag == "table":
+                rows = [r for r in self.table if r]
+                self.table = None
+                if rows:
+                    if self.started and not self._it().starts_line():
+                        self.write("\n")
+                    self.b.place_cursor(self.b.get_end_iter())
+                    self.ed.insert_table(len(rows), max(len(r) for r in rows), rows)
+                    self.started = True
+            return
         if tag in ("style", "script", "head", "title"):
             self.skip = max(0, self.skip - 1)
             return
@@ -708,6 +902,10 @@ class _Loader(HTMLParser):
 
     def handle_data(self, data):
         if self.skip:
+            return
+        if self.table is not None:
+            if self.table and self.table[-1]:
+                self.table[-1][-1] += re.sub(r"\s+", " ", data).strip() if data.strip() else ""
             return
         if not data.strip() and ("\n" in data or self._it().starts_line()):
             return

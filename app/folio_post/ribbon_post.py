@@ -44,12 +44,12 @@ class Builder:
             return lambda: menu_popover(None, self.menu(menu()))
         return self.menu(menu)
 
-    def big(self, label, icon, cmd, keytip, menu=None, tip=None):
+    def big(self, label, icon, cmd, keytip, menu=None, tip=None, state=None):
         if menu is not None:
             if cmd is None:
                 return MenuButton(self.r, label, icon, self._m(menu), size="large", keytip=keytip, tooltip=tip or label)
             return SplitButton(self.r, label, icon, cmd, self._m(menu), size="large", keytip=keytip, tooltip=tip or label)
-        return RibbonButton(self.r, label, icon, cmd, size="large", keytip=keytip, tooltip=tip or label)
+        return RibbonButton(self.r, label, icon, cmd, size="large", keytip=keytip, tooltip=tip or label, state=state)
 
     def small(self, label, icon, cmd, keytip, menu=None, tip=None, state=None):
         if label is None and menu is None:

@@ -284,6 +284,14 @@ try:
     trip = [i for i in v.instances if i.event.summary == "Trip"]
     check(trip and trip[0].all_day, "all-day event across days")
     shot(win, "week_allday")
+    # calendar groups
+    v.show_calendar(wid, False)
+    win.run("save-calendar-group:Personal only")
+    win.run("calendar-group:")
+    check(store.calendar(wid)["shown"] == 1, "Show All Calendars")
+    win.run("calendar-group:Personal only")
+    check(store.calendar(wid)["shown"] == 0 and store.calendar(pid)["shown"] == 1, "a calendar group shows its calendars")
+    win.run("calendar-group:")
     # new local calendar, rename, colour
     ANSWERS[:] = ["Family"]
     fam = win.run("new-calendar")

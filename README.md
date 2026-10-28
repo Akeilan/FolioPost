@@ -9,6 +9,8 @@ Reading Pane, and Outlook's keyboard shortcuts. Part of the Folio suite.
   Google Calendar and CalDAV; read-only internet calendars such as Proton Calendar's share link.
 - **People and Tasks:** contacts and groups (vCard, Google Contacts, CardDAV), tasks, flagged mail on the To-Do
   List, notes.
+- **OpenPGP:** encrypt and sign with your GnuPG keys (PGP/MIME); encrypted and signed mail opens and its
+  signature is checked.
 - **Files:** .eml, .mbox, .pst/.ost (readpst), .msg (msgconvert), .ics, .vcf.
 - **Offline:** mail is kept on this computer (SQLite with full-text search); changes made offline go to the
   server at the next Send/Receive, new mail waits in the Outbox.
