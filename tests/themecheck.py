@@ -105,7 +105,8 @@ def _grab(win):
     cr = cairo.Context(img)
     cr.set_source_rgb(1, 1, 1)
     cr.paint()
-    win.draw(cr)
+    from gi.repository import Gtk
+    Gtk.Widget.draw(win, cr)   # not win.draw: an app may use that name for its own things
     img.flush()
     return img, w, h, img.get_stride(), img.get_data()
 
