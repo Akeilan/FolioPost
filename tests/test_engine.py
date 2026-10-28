@@ -1,5 +1,6 @@
 """Engine tests: the store, MIME, safe HTML, IMAP/SMTP sync against the test server."""
 import os
+import urllib.parse
 import sys
 import tempfile
 import time
@@ -110,5 +111,10 @@ check(any(f["path"] == "Projects" for f in st.folders(aid)), "new folder")
 loc = st.add_account("On My Computer", "", "local", {})
 check(len(st.folders(loc)) == 7, "local folders")
 stop()
+from folio_post import oauth as OA
+u = OA.auth_url("cid", "http://127.0.0.1:1/", "chal", "st", "me@outlook.com", "microsoft")
+check(u.startswith(OA.MS_AUTH) and "IMAP.AccessAsUser.All" in urllib.parse.unquote(u) and "offline_access" in u, "Outlook.com sign-in address")
+g = OA.auth_url("cid", "http://127.0.0.1:1/", "chal", "st", "", "google")
+check(g.startswith(OA.GOOGLE_AUTH) and "access_type=offline" in g, "Google sign-in address")
 print("FAILED: %d" % len(FAILS) if FAILS else "all passed")
 sys.exit(1 if FAILS else 0)

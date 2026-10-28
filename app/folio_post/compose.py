@@ -343,8 +343,8 @@ class ComposeWindow(Gtk.Window):
 
         t = r.building(Tab("Options", "P"))
         B.group(t, "Show Fields", [B.big("Bcc", "p-bcc", "toggle-bcc", "B"), B.big("From", "p-from", "toggle-from", "F")])
-        B.group(t, "Encrypt", [B.big("Encrypt", "p-properties", "toggle-encrypt", "E", tip="Encrypt with OpenPGP", state="encrypt"),
-                               B.big("Sign", "p-signature", "toggle-sign", "SG", tip="Sign with OpenPGP", state="sign")])
+        B.group(t, "Encrypt", [B.big("Encrypt", "p-properties", "toggle-encrypt", "E", tip="Encrypt (S/MIME with your certificate, else OpenPGP)", state="encrypt"),
+                               B.big("Sign", "p-signature", "toggle-sign", "SG", tip="Sign (S/MIME with your certificate, else OpenPGP)", state="sign")])
         self.receipt_check = CheckControl(r, "Request a Read Receipt", "toggle-read-receipt", state="read-receipt", keytip="Q")
         self.delivery_check = CheckControl(r, "Request a Delivery Receipt", "toggle-delivery-receipt",
                                            state="delivery-receipt", keytip="R")
@@ -820,7 +820,17 @@ class ComposeWindow(Gtk.Window):
                 return False
         m = self.build()
         rcpts = mime.recipients(m)
-        if getattr(self, "encrypt", False) or getattr(self, "sign", False):
+        from . import smime
+        use_smime = smime.openssl() is not None and smime.has_mine(acc["email"]) and \
+            (not getattr(self, "encrypt", False) or not smime.missing_certs(rcpts))
+        if use_smime and (getattr(self, "encrypt", False) or getattr(self, "sign", False)):
+            try:
+                raw = smime.protect(m, encrypt_to=(rcpts + [acc["email"]]) if getattr(self, "encrypt", False) else None,
+                                    sign_as=acc["email"] if getattr(self, "sign", False) else None)
+            except Exception as e:
+                self.dialogs.message("S/MIME didn't work: %s" % e)
+                return False
+        elif getattr(self, "encrypt", False) or getattr(self, "sign", False):
             from . import pgp
             if pgp.gpg() is None:
                 self.dialogs.message("Encrypting and signing need GnuPG (package gnupg).")

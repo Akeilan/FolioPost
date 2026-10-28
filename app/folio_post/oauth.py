@@ -13,6 +13,10 @@ import time
 import urllib.parse
 import urllib.request
 
+MS_AUTH = "https://login.microsoftonline.com/common/oauth2/v2.0/authorize"
+MS_TOKEN = "https://login.microsoftonline.com/common/oauth2/v2.0/token"
+MS_SCOPES = ["https://outlook.office.com/IMAP.AccessAsUser.All", "https://outlook.office.com/SMTP.Send", "offline_access",
+             "openid", "email"]
 GOOGLE_AUTH = "https://accounts.google.com/o/oauth2/v2/auth"
 GOOGLE_TOKEN = "https://oauth2.googleapis.com/token"
 GOOGLE_SCOPES = ["https://mail.google.com/", "https://www.googleapis.com/auth/calendar",
@@ -35,7 +39,26 @@ class _Catch(http.server.BaseHTTPRequestHandler):
         pass
 
 
-def sign_in(client_id, client_secret="", open_url=None, timeout=300, login_hint=""):
+def endpoints(provider):
+    if provider == "microsoft":
+        return MS_AUTH, MS_TOKEN, MS_SCOPES
+    return GOOGLE_AUTH, GOOGLE_TOKEN, GOOGLE_SCOPES
+
+
+def auth_url(client_id, redirect, challenge, state, login_hint="", provider="google"):
+    auth, _tok, scopes = endpoints(provider)
+    q = {"client_id": client_id, "redirect_uri": redirect, "response_type": "code", "scope": " ".join(scopes),
+         "code_challenge": challenge, "code_challenge_method": "S256", "state": state}
+    if provider == "google":
+        q.update({"access_type": "offline", "prompt": "consent"})
+    else:
+        q["prompt"] = "select_account"
+    if login_hint:
+        q["login_hint"] = login_hint
+    return auth + "?" + urllib.parse.urlencode(q)
+
+
+def sign_in(client_id, client_secret="", open_url=None, timeout=300, login_hint="", provider="google"):
     """The browser sign-in; returns tokens {access_token, refresh_token, expires_at}."""
     srv = http.server.HTTPServer(("127.0.0.1", 0), _Catch)
     srv.result = None
@@ -43,12 +66,7 @@ def sign_in(client_id, client_secret="", open_url=None, timeout=300, login_hint=
     verifier = base64.urlsafe_b64encode(secrets.token_bytes(48)).decode().rstrip("=")
     challenge = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).decode().rstrip("=")
     state = secrets.token_urlsafe(16)
-    q = {"client_id": client_id, "redirect_uri": redirect, "response_type": "code", "scope": " ".join(GOOGLE_SCOPES),
-         "code_challenge": challenge, "code_challenge_method": "S256", "access_type": "offline", "prompt": "consent",
-         "state": state}
-    if login_hint:
-        q["login_hint"] = login_hint
-    url = GOOGLE_AUTH + "?" + urllib.parse.urlencode(q)
+    url = auth_url(client_id, redirect, challenge, state, login_hint, provider)
     t = threading.Thread(target=lambda: _serve(srv, timeout), daemon=True)
     t.start()
     (open_url or _open)(url)
@@ -61,7 +79,7 @@ def sign_in(client_id, client_secret="", open_url=None, timeout=300, login_hint=
             "code_verifier": verifier}
     if client_secret:
         data["client_secret"] = client_secret
-    return _token(data)
+    return _token(data, provider)
 
 
 def _serve(srv, timeout):
@@ -76,8 +94,8 @@ def _open(url):
     subprocess.Popen(["xdg-open", url])
 
 
-def _token(data):
-    req = urllib.request.Request(GOOGLE_TOKEN, data=urllib.parse.urlencode(data).encode(),
+def _token(data, provider="google"):
+    req = urllib.request.Request(endpoints(provider)[1], data=urllib.parse.urlencode(data).encode(),
                                  headers={"Content-Type": "application/x-www-form-urlencoded"})
     with urllib.request.urlopen(req, timeout=30) as resp:
         t = json.loads(resp.read().decode())
@@ -85,11 +103,11 @@ def _token(data):
     return t
 
 
-def refresh(client_id, client_secret, tokens):
+def refresh(client_id, client_secret, tokens, provider="google"):
     data = {"client_id": client_id, "refresh_token": tokens["refresh_token"], "grant_type": "refresh_token"}
     if client_secret:
         data["client_secret"] = client_secret
-    t = _token(data)
+    t = _token(data, provider)
     t.setdefault("refresh_token", tokens["refresh_token"])
     return t
 
@@ -101,7 +119,10 @@ class TokenSource:
         self.store = store
         self.secrets = secrets_
 
-    def client(self):
+    def client(self, provider="google"):
+        if provider == "microsoft":
+            c = self.store.get("microsoft-client", {}) or {}
+            return c.get("id") or os.environ.get("FOLIO_POST_MICROSOFT_CLIENT_ID", ""), ""
         c = self.store.get("google-client", {}) or {}
         cid = c.get("id") or os.environ.get("FOLIO_POST_GOOGLE_CLIENT_ID", "")
         return cid, c.get("secret") or os.environ.get("FOLIO_POST_GOOGLE_CLIENT_SECRET", "")
@@ -112,7 +133,8 @@ class TokenSource:
             raise RuntimeError("this account needs signing in again")
         tokens = json.loads(raw)
         if tokens.get("expires_at", 0) < time.time() and tokens.get("refresh_token"):
-            cid, sec = self.client()
-            tokens = refresh(cid, sec, tokens)
+            provider = acc["config"].get("oauth_provider", "google")
+            cid, sec = self.client(provider)
+            tokens = refresh(cid, sec, tokens, provider)
             self.secrets.set(acc["id"], json.dumps(tokens), "oauth")
         return tokens["access_token"]

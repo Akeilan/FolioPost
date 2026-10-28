@@ -225,6 +225,11 @@ class ReadingPane(Gtk.Box):
         from . import pgp
         if pgp.kind(msg):
             msg, self.security = pgp.open_message(self.raw)
+        else:
+            from . import smime
+            if smime.kind(msg):
+                me = [a["email"] for a in self.win.store.accounts() if a["email"]]
+                msg, self.security = smime.open_message(self.raw, me)
         self.msg = msg
         self.remote = None
         subject = mime.header(msg, "Subject") or "(no subject)"
