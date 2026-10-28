@@ -113,7 +113,7 @@ def build_ribbon(win):
     t = r.building(Tab("Home", "H"))
     B.group(t, "New", [
         B.big("New Email", "p-new-email", "new-email", "N",
-              menu=[("E-mail Message", "new-email", "p-new-email"), ("Meeting", na("Meeting"), "p-meeting"),
+              menu=[("E-mail Message", "new-email", "p-new-email"), ("Meeting", "new-meeting", "p-meeting"),
                     ("Contact", na("Contact")), ("Task", na("Task")), None,
                     ("Folder...", "new-folder", "p-new-folder")],
               tip="New Email (Ctrl+N)"),
@@ -133,7 +133,7 @@ def build_ribbon(win):
         B.big("Reply All", "p-reply-all", "reply-all", "RA", tip="Reply All (Ctrl+Shift+R)"),
         B.big("Forward", "p-forward", "forward", "FW", tip="Forward (Ctrl+F)"),
         [B.small("More", "p-attach-item", None, "M",
-                 menu=[("Forward as Attachment", "forward-attachment"), ("Reply with Meeting", na("Reply with Meeting"))])],
+                 menu=[("Forward as Attachment", "forward-attachment"), ("Reply with Meeting", "reply-with-meeting")])],
     ])
     B.group(t, "Quick Steps", [
         B.big("Quick Steps", "p-quick-steps", None, "QS",

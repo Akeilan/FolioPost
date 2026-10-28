@@ -105,3 +105,4 @@ menu menuitem:hover { background: #2e2e55; }
 .folio-listfilter:checked { color: #a8a8e0; border-bottom-color: #a8a8e0; }
 .folio-compose-head entry { background: #2b2b2b; color: #f0f0f0; border-color: #555555; }
 .folio-folders:selected, .folio-messages:selected, .folio-folders.view:selected, .folio-messages.view:selected { background-color: #2e2e55; color: #f0f0f0; }
+.folio-invitebar { background: #2a2a4a; border-color: #4a4a7a; }
