@@ -1,0 +1,6 @@
+#!/bin/sh
+# Folio Post launcher
+export FOLIO_POST_SHARE=/usr/share/folio-post
+PYTHONPATH=/usr/lib/folio-post${PYTHONPATH:+:$PYTHONPATH}
+export PYTHONPATH
+exec "${FOLIO_PYTHON:-/usr/bin/python3}" -m folio_post "$@"

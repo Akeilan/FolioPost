@@ -1,0 +1,17 @@
+[Desktop Entry]
+Type=Application
+Name=Folio Post
+GenericName=Mail
+Comment=Read and write e-mail
+Exec=folio-post %U
+Icon=folio-post
+Terminal=false
+Categories=Office;Network;Email;
+MimeType=x-scheme-handler/mailto;message/rfc822;
+Keywords=mail;email;e-mail;gmail;proton;imap;outlook;
+StartupWMClass=org.folio.Post
+Actions=Compose;
+
+[Desktop Action Compose]
+Name=New Email
+Exec=folio-post mailto:
