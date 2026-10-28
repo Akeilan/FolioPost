@@ -35,6 +35,8 @@ PROVIDERS = {
     "zoho.com": ("password", {"imap_host": "imap.zoho.com", "imap_port": 993, "imap_security": "ssl",
                               "smtp_host": "smtp.zoho.com", "smtp_port": 465, "smtp_security": "ssl"}),
 }
+OUTLOOK = {"imap_host": "outlook.office365.com", "imap_port": 993, "imap_security": "ssl", "smtp_host": "smtp.office365.com",
+           "smtp_port": 587, "smtp_security": "starttls", "server_saves_sent": True, "auth": "oauth", "oauth_provider": "microsoft"}
 MICROSOFT = ("outlook.com", "hotmail.com", "live.com", "msn.com", "outlook.nl", "hotmail.nl", "live.nl")
 SECURITY = [("ssl", "SSL/TLS"), ("starttls", "STARTTLS"), ("none", "None")]
 
@@ -207,6 +209,46 @@ class AccountDialog(Gtk.Dialog):
         self.ok.set_label("Sign In")
         self.box.show_all()
 
+    def page_microsoft(self):
+        self._clear()
+        self.page = "microsoft"
+        self._title("Outlook.com", self.email)
+        cid, _s = self.win.app.tokens.client("microsoft")
+        self._note("Microsoft lets other mail apps into Outlook.com only through its own sign-in in the browser. It needs an "
+                   "application (client) ID: register one once at <i>portal.azure.com</i> &gt; App registrations (Mobile and "
+                   "desktop, redirect http://localhost, with the IMAP.AccessAsUser.All and SMTP.Send permissions) and paste it "
+                   "here.")
+        self.ms_client = self._entry("Application (client) ID", cid)
+        self._status()
+        self.ok.set_label("Sign In")
+        self.box.show_all()
+
+    def next_microsoft(self):
+        cid = self.ms_client.get_text().strip()
+        if not cid:
+            self.say("Paste the application (client) ID first.")
+            return
+        self.win.store.put("microsoft-client", {"id": cid})
+        cfg = dict(OUTLOOK, user=self.email)
+        self.say("Finish signing in in your browser...", busy=True)
+
+        def work():
+            try:
+                t = oauth.sign_in(cid, "", login_hint=self.email, provider="microsoft")
+                err = self.win.app.syncer.test_account(cfg, None, t["access_token"])
+            except Exception as e:
+                t, err = None, "Microsoft sign-in didn't finish: %s" % e
+            GLib.idle_add(done, t, err)
+
+        def done(t, err):
+            self.say("")
+            if err:
+                self.say("<span foreground='#c42b1c'>%s</span>" % GLib.markup_escape_text(err))
+            else:
+                self._finish(cfg, tokens=t)
+            return False
+        threading.Thread(target=work, daemon=True).start()
+
     def page_proton(self):
         self._clear()
         self.page = "proton"
@@ -336,9 +378,7 @@ class AccountDialog(Gtk.Dialog):
         if kind == "proton":
             return self.page_proton()
         if kind == "microsoft":
-            return self.page_password("Microsoft lets other mail apps into Outlook.com only with its own sign-in, which "
-                                      "Folio Post doesn't have yet. You can still try a password, or set the server up "
-                                      "manually.")
+            return self.page_microsoft()
         if kind == "app-password":
             return self.page_password("This provider wants an <b>app password</b> made in its account security settings, "
                                       "not your usual password.")

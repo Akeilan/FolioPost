@@ -2121,6 +2121,35 @@ class PostWindow(TaskCommands, PeopleCommands, CalendarCommands, Gtk.Application
         from .options import options_dialog
         options_dialog(self, page)
 
+    def act_import_certificate(self, path=None, password=None):
+        """Your S/MIME certificate and key, for the current account."""
+        from . import smime
+        acc = self.current_account()
+        if acc is None:
+            return self.dialogs.info("Add an account first.")
+        if path is None:
+            dlg = Gtk.FileChooserDialog(title="Import S/MIME Certificate", transient_for=self, action=Gtk.FileChooserAction.OPEN)
+            dlg.add_buttons("Cancel", Gtk.ResponseType.CANCEL, "Open", Gtk.ResponseType.OK)
+            f = Gtk.FileFilter()
+            f.set_name("Certificates (*.p12, *.pfx)")
+            f.add_pattern("*.p12")
+            f.add_pattern("*.pfx")
+            dlg.add_filter(f)
+            path = dlg.get_filename() if dlg.run() == Gtk.ResponseType.OK else None
+            dlg.destroy()
+            if not path:
+                return None
+        if password is None:
+            password = self.dialogs.ask_password("Import S/MIME Certificate", "The file's password:")
+            if password is None:
+                return None
+        try:
+            cert = smime.import_p12(path, password, acc["email"])
+        except Exception as e:
+            return self.dialogs.message("The certificate couldn't be imported: %s" % e)
+        self.dialogs.info("Your S/MIME certificate for %s is ready. Encrypt and Sign in a message now use it." % acc["email"])
+        return cert
+
     def act_signatures(self):
         from .options import signatures_dialog
         signatures_dialog(self)
