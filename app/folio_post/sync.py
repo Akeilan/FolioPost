@@ -89,7 +89,7 @@ class Syncer:
 
     def credentials(self, acc):
         cfg = acc["config"]
-        if cfg.get("auth") == "oauth" and self.oauth is not None:
+        if cfg.get("auth") in ("oauth", "goa") and self.oauth is not None:
             return None, self.oauth(acc)
         return self.secrets.get(acc["id"]) or cfg.get("password", ""), None
 

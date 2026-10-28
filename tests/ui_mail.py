@@ -104,6 +104,7 @@ try:
     world = mailserver.World()
     boxes = world.add_user("me@example.org", "secret")
     world.add_user("bob@example.org", "pw")
+    world.add_user("ron@gmail.com", "unused")
     for i in range(8):
         boxes["INBOX"].add(mailserver.sample(i, html=i == 0, attach=i == 2,
                                              frm="Bob Stone <bob@example.org>" if i in (1, 3) else "Ann Lee <ann@example.org>"),
@@ -439,6 +440,69 @@ try:
     pump(0.2)
     check(dlg.page == "gmail", "Gmail: sign-in choice")
     check(buttons_shown(dlg) and dlg.back.get_mapped(), "the buttons stay on the next page")
+
+    def entries(d):
+        out = []
+
+        def walk(w):
+            if isinstance(w, Gtk.Entry) and w.get_mapped():
+                out.append(w)
+            if isinstance(w, Gtk.Container):
+                w.foreach(walk)
+        walk(d.box)
+        return out
+    check(not any("client" in (e.get_placeholder_text() or "").lower() for e in entries(dlg)),
+          "Gmail asks for no client ID or secret")
+    dlg.response(1)
+    pump(0.1)
+
+    # Online Accounts: a Google account there connects with nothing to type
+    from folio_post import goa, accounts as accmod
+
+    class GoaStub:
+        def __init__(self):
+            self.accs = []
+
+        def available(self):
+            return True
+
+        def accounts(self):
+            return list(self.accs)
+
+        def token(self, gid):
+            return "test-token"
+    stub = GoaStub()
+    goa.backend = stub
+    opened = []
+    goa.open_settings = lambda: opened.append(1) or True
+    saved_gmail = dict(accmod.GMAIL)
+    accmod.GMAIL.update(imap_host="127.0.0.1", imap_port=ip, imap_security="none", smtp_host="127.0.0.1",
+                        smtp_port=sp, smtp_security="none")
+    dlg.email_entry.set_text("ron@gmail.com")
+    dlg.response(Gtk.ResponseType.OK)
+    pump(0.2)
+    check(dlg.page == "gmail" and dlg.use_goa, "Gmail page uses Online Accounts")
+    check(entries(dlg) == [], "nothing to type on the Gmail page: %s" % [e.get_placeholder_text() for e in entries(dlg)])
+    shot(dlg, "gmail_goa")
+    dlg.response(Gtk.ResponseType.OK)
+    pump(0.3)
+    check(opened and "Waiting" in dlg.msg.get_text(), "Connect opens Online Accounts and waits for the account")
+    stub.accs.append({"id": "goa1", "path": "/x", "provider": "google", "email": "ron@gmail.com", "mail": True,
+                      "calendar": True, "contacts": True})
+    ok = wait(lambda: any(a["email"] == "ron@gmail.com" for a in store.accounts()), 20)
+    check(ok, "the Online Accounts sign-in adds the Gmail account")
+    ron = [a for a in store.accounts() if a["email"] == "ron@gmail.com"]
+    check(ron and ron[0]["config"].get("auth") == "goa" and ron[0]["config"].get("goa_id") == "goa1",
+          "account kept as an Online Accounts one")
+    wait(lambda: not app.busy(), 15)
+    check(app.syncer.credentials(ron[0]) == (None, "test-token"), "mail signs in with the Online Accounts token")
+    store.remove_account(ron[0]["id"])
+    win.refresh_folders()
+    accmod.GMAIL.clear()
+    accmod.GMAIL.update(saved_gmail)
+    goa.backend = None
+    dlg = AccountDialog(win)
+    pump(0.1)
     dlg.response(1)
     pump(0.1)
     dlg.email_entry.set_text("someone@proton.me")

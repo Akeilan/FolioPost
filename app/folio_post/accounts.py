@@ -71,7 +71,8 @@ def create_account(win, name, email, cfg, secret=None, oauth_tokens=None, kind="
     elif secret is not None:
         win.app.secrets.set(aid, secret)
     win.refresh_folders()
-    if oauth_tokens is not None and cfg.get("imap_host") == "imap.gmail.com" and not win.app.syncer.offline:
+    signed_in = oauth_tokens is not None or cfg.get("auth") == "goa"
+    if signed_in and cfg.get("imap_host") == "imap.gmail.com" and not win.app.syncer.offline:
         # the same Google sign-in opens Google Calendar
         def cal_job():
             ids = win.app.calsync.add_google(aid)
@@ -181,64 +182,144 @@ class AccountDialog(Gtk.Dialog):
         self.email_entry.grab_focus()
 
     def page_gmail(self):
-        self._clear()
-        self.page = "gmail"
-        self._title("Gmail", self.email)
-        cid, _sec = self.win.app.tokens.client()
-        self.method_google = Gtk.RadioButton.new_with_label(None, "Sign in with Google in the browser")
-        self.method_app = Gtk.RadioButton.new_with_label_from_widget(self.method_google, "Use an app password")
-        self.box.pack_start(self.method_google, False, False, 2)
-        self._note("<small>Opens Google's own sign-in page in your browser. Post needs an OAuth client ID for that: make one "
-                   "once in your Google Cloud console (APIs &amp; Services &gt; Credentials &gt; Create OAuth client ID, type "
-                   "<i>Desktop app</i>) and paste it here.</small>")
-        self.client_entry = self._entry("OAuth client ID", cid)
-        self.secret_entry = self._entry("Client secret (if Google shows one)", self.win.app.tokens.client()[1])
-        self.box.pack_start(self.method_app, False, False, 6)
-        self._note("<small>Google account &gt; Security &gt; 2-Step Verification &gt; App passwords. Make one for “Folio Post” "
-                   "and type it below.</small>")
-        self.password_entry = self._entry("App password", visible=False)
-        self.method_app.set_active(not cid)
-
-        def toggled(*_):
-            g = self.method_google.get_active()
-            self.client_entry.set_sensitive(g)
-            self.secret_entry.set_sensitive(g)
-            self.password_entry.set_sensitive(not g)
-        self.method_google.connect("toggled", toggled)
-        toggled()
-        self._status()
-        self.ok.set_label("Sign In")
-        self.box.show_all()
+        self._oauth_page("gmail", "Gmail", "google", "Google")
 
     def page_microsoft(self):
+        self._oauth_page("microsoft", "Outlook.com", "microsoft", "Microsoft")
+
+    def _oauth_page(self, page, title, provider, company):
+        """Google and Microsoft: the desktop's Online Accounts signs in, so nothing is typed here. Without it, Google
+        takes an app password; a client ID built into the package (or set in Options) allows the browser sign-in."""
+        from . import goa
         self._clear()
-        self.page = "microsoft"
-        self._title("Outlook.com", self.email)
-        cid, _s = self.win.app.tokens.client("microsoft")
-        self._note("Microsoft lets other mail apps into Outlook.com only through its own sign-in in the browser. It needs an "
-                   "application (client) ID: register one once at <i>portal.azure.com</i> &gt; App registrations (Mobile and "
-                   "desktop, redirect http://localhost, with the IMAP.AccessAsUser.All and SMTP.Send permissions) and paste it "
-                   "here.")
-        self.ms_client = self._entry("Application (client) ID", cid)
+        self.page = page
+        self.provider = provider
+        self._title(title, self.email)
+        self.use_goa = goa.available()
+        self.use_browser = not self.use_goa and bool(self.win.app.tokens.client(provider)[0])
+        self.password_entry = None
+        if self.use_goa:
+            found = goa.find(self.email, provider)
+            if found:
+                self._note("Your %s account is in Online Accounts. Connect, and that's all." % company)
+            else:
+                self._note("Connect opens Settings &gt; Online Accounts. Sign in to %s there and Post picks the "
+                           "account up by itself." % company)
+        elif self.use_browser:
+            self._note("Connect opens %s's sign-in page in your browser." % company)
+        if provider == "google":
+            self.app_toggle = Gtk.Button(label="Use an app password instead")
+            self.app_toggle.set_relief(Gtk.ReliefStyle.NONE)
+            self.app_toggle.set_halign(Gtk.Align.START)
+            self.box.pack_start(self.app_toggle, False, False, 0)
+            pw_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+            lab = Gtk.Label(xalign=0)
+            lab.set_markup("<small>Make one at myaccount.google.com &gt; Security &gt; App passwords.</small>")
+            pw_box.pack_start(lab, False, False, 0)
+            self.password_entry = Gtk.Entry(visibility=False)
+            self.password_entry.set_activates_default(True)
+            self.password_entry.set_placeholder_text("App password")
+            pw_box.pack_start(self.password_entry, False, False, 0)
+            self.box.pack_start(pw_box, False, False, 0)
+            self.pw_box = pw_box
+            self.app_toggle.connect("clicked", lambda *_: (pw_box.show_all(), self.app_toggle.hide(),
+                                                           self.password_entry.grab_focus()))
+        elif not self.use_goa and not self.use_browser:
+            self._note("Microsoft lets other mail apps into Outlook.com only through its own sign-in, which Post reaches "
+                       "through Settings &gt; Online Accounts. This computer doesn't have Online Accounts (package "
+                       "gnome-online-accounts).")
         self._status()
-        self.ok.set_label("Sign In")
+        self.ok.set_label("Connect")
         self.box.show_all()
+        if provider == "google":
+            if self.use_goa or self.use_browser:
+                self.pw_box.hide()
+            else:
+                self.app_toggle.hide()
+
+    def next_gmail(self):
+        self._next_oauth(dict(GMAIL), "google")
 
     def next_microsoft(self):
-        cid = self.ms_client.get_text().strip()
-        if not cid:
-            self.say("Paste the application (client) ID first.")
+        self._next_oauth(dict(OUTLOOK), "microsoft")
+
+    def _next_oauth(self, cfg, provider):
+        from . import goa
+        cfg["user"] = self.email
+        if self.password_entry is not None and self.password_entry.get_visible() and self.password_entry.get_text():
+            pw = self.password_entry.get_text().replace(" ", "")
+            cfg["auth"] = "password"
+            cfg.pop("oauth_provider", None)
+            self._test(cfg, pw, then=lambda: self._finish(cfg, pw))
             return
-        self.win.store.put("microsoft-client", {"id": cid})
-        cfg = dict(OUTLOOK, user=self.email)
+        if self.use_goa:
+            found = goa.find(self.email, provider)
+            if found is None:
+                if not getattr(self, "waiting", False):
+                    self.waiting = True
+                    goa.open_settings()
+                    self._wait_goa(cfg, provider, 0)
+                self.say("Waiting for the account to appear in Online Accounts...", busy=True)
+                self.ok.set_sensitive(True)
+                self.busy = False
+                return
+            return self._goa_connect(cfg, found)
+        if self.use_browser:
+            return self._browser_sign_in(cfg, provider)
+        self.say("Type an app password, or install Online Accounts (gnome-online-accounts).")
+
+    def _wait_goa(self, cfg, provider, n):
+        from . import goa
+        if not self.get_visible():
+            return False
+        found = goa.find(self.email, provider)
+        if found is not None:
+            self.waiting = False
+            self._goa_connect(cfg, found)
+            return False
+        if n > 300:
+            self.say("No %s account for %s turned up in Online Accounts." % (provider.capitalize(), self.email))
+            return False
+        GLib.timeout_add_seconds(2, self._wait_goa, cfg, provider, n + 1)
+        return False
+
+    def _goa_connect(self, cfg, found):
+        from . import goa
+        if not found["mail"]:
+            self.say("Mail is switched off for this account in Settings &gt; Online Accounts. Switch it on and Connect again.")
+            return
+        cfg = dict(cfg, auth="goa", goa_id=found["id"])
+        self.say("Connecting...", busy=True)
+
+        def work():
+            try:
+                tok = goa.token(found["id"])
+                err = self.win.app.syncer.test_account(cfg, None, tok)
+            except Exception as e:
+                err = "Online Accounts didn't give a sign-in: %s" % e
+            GLib.idle_add(done, err)
+
+        def done(err):
+            self.say("")
+            if err:
+                self.say("<span foreground='#c42b1c'>%s</span>" % GLib.markup_escape_text(err))
+            else:
+                self._finish(cfg, tokens=None, oauth_like=True)
+            return False
+        threading.Thread(target=work, daemon=True).start()
+
+    def _browser_sign_in(self, cfg, provider):
+        cid, sec = self.win.app.tokens.client(provider)
+        cfg["auth"] = "oauth"
+        cfg["oauth_provider"] = provider
         self.say("Finish signing in in your browser...", busy=True)
 
         def work():
             try:
-                t = oauth.sign_in(cid, "", login_hint=self.email, provider="microsoft")
+                t = oauth.sign_in(cid, sec, login_hint=self.email, provider=provider)
                 err = self.win.app.syncer.test_account(cfg, None, t["access_token"])
             except Exception as e:
-                t, err = None, "Microsoft sign-in didn't finish: %s" % e
+                t, err = None, "The sign-in didn't finish: %s" % e
             GLib.idle_add(done, t, err)
 
         def done(t, err):
@@ -258,7 +339,14 @@ class AccountDialog(Gtk.Dialog):
                    "Bridge</b>, Proton's own app (it needs a paid Proton plan). Install Bridge, sign in there, then copy "
                    "the IMAP/SMTP password Bridge shows for this address.")
         self.password_entry = self._entry("Bridge password", visible=False)
-        self.host_entry = self._entry("Bridge address", "127.0.0.1")
+        adv = Gtk.Expander(label="Bridge address and ports (only if you changed them in Bridge)")
+        inner = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        inner.set_margin_top(6)
+        adv.add(inner)
+        self.box.pack_start(adv, False, False, 0)
+        self.host_entry = Gtk.Entry(text="127.0.0.1")
+        self.host_entry.set_activates_default(True)
+        inner.pack_start(self.host_entry, False, False, 0)
         row = Gtk.Box(spacing=8)
         self.imap_port_entry = Gtk.SpinButton.new_with_range(1, 65535, 1)
         self.imap_port_entry.set_value(self.cfg.get("imap_port", 1143))
@@ -268,7 +356,7 @@ class AccountDialog(Gtk.Dialog):
         row.pack_start(self.imap_port_entry, False, False, 0)
         row.pack_start(Gtk.Label(label="SMTP port"), False, False, 0)
         row.pack_start(self.smtp_port_entry, False, False, 0)
-        self.box.pack_start(row, False, False, 4)
+        inner.pack_start(row, False, False, 0)
         self._note("<small>Bridge uses a certificate of its own. Post trusts the one it finds when you connect and "
                    "refuses any other later.</small>")
         self._status()
@@ -402,7 +490,7 @@ class AccountDialog(Gtk.Dialog):
             return False
         threading.Thread(target=work, daemon=True).start()
 
-    def _finish(self, cfg, password=None, tokens=None, kind="imap"):
+    def _finish(self, cfg, password=None, tokens=None, kind="imap", oauth_like=False):
         cfg = dict(cfg)
         cfg["user"] = cfg.get("user") or self.email
         self.result = create_account(self.win, self.display_name or self.email, self.email, cfg, password, tokens, kind)
@@ -413,39 +501,6 @@ class AccountDialog(Gtk.Dialog):
         pw = self.password_entry.get_text()
         cfg = dict(self.cfg, user=self.email)
         self._test(cfg, pw, then=lambda: self._finish(cfg, pw))
-
-    def next_gmail(self):
-        cfg = dict(GMAIL, user=self.email)
-        if self.method_app.get_active():
-            pw = self.password_entry.get_text().replace(" ", "")
-            cfg["auth"] = "password"
-            self._test(cfg, pw, then=lambda: self._finish(cfg, pw))
-            return
-        cid = self.client_entry.get_text().strip()
-        sec = self.secret_entry.get_text().strip()
-        if not cid:
-            self.say("Paste the OAuth client ID first, or use an app password.")
-            return
-        self.win.store.put("google-client", {"id": cid, "secret": sec})
-        cfg["auth"] = "oauth"
-        self.say("Finish signing in in your browser...", busy=True)
-
-        def work():
-            try:
-                t = oauth.sign_in(cid, sec, login_hint=self.email)
-                err = self.win.app.syncer.test_account(cfg, None, t["access_token"])
-            except Exception as e:
-                t, err = None, "Google sign-in didn't finish: %s" % e
-            GLib.idle_add(done, t, err)
-
-        def done(t, err):
-            self.say("")
-            if err:
-                self.say("<span foreground='#c42b1c'>%s</span>" % GLib.markup_escape_text(err))
-            else:
-                self._finish(cfg, tokens=t)
-            return False
-        threading.Thread(target=work, daemon=True).start()
 
     def next_proton(self):
         pw = self.password_entry.get_text()
