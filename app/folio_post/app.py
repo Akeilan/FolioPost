@@ -45,6 +45,8 @@ class PostApp(Gtk.Application):
         from .caldav import CalendarSync
         from .reminders import Reminders
         self.calsync = CalendarSync(self.store, self.secrets, self.tokens)
+        from .carddav import ContactSync
+        self.contactsync = ContactSync(self.store, self.secrets, self.tokens)
         self.reminders = Reminders(self)
         self.queue = []
         self.queue_lock = threading.Lock()
@@ -118,6 +120,7 @@ class PostApp(Gtk.Application):
             r = [self.syncer.sync_account(a, folders) for a in aids]
             if folders is None and not self.syncer.offline:
                 self.calsync.sync_all()
+                self.contactsync.sync_all()
             return r
 
         def finished(r, e):

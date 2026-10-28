@@ -19,7 +19,7 @@ def build_cal_ribbon(win, r):
         B.big("New Appointment", "p-nav-calendar", "new-appointment", "N", tip="New Appointment (Ctrl+N)"),
         B.big("New Meeting", "p-meeting", "new-meeting", "MR", tip="New Meeting (Ctrl+Shift+Q)"),
         [B.small("New Items", "p-new-email", None, "I", menu=[("E-mail Message", "new-email-message"), ("All Day Event", "new-all-day"),
-                                                            ("Contact", na("Contact")), ("Task", na("Task"))])],
+                                                            ("Contact", "new-contact"), ("Task", "new-task")])],
     ])
     B.group(t, "Go To", [B.big("Today", "p-nav-calendar", "cal-today", "OD"), B.big("Next 7 Days", "p-change-view", "cal-next7", "X")])
     B.group(t, "Arrange", [
@@ -36,9 +36,9 @@ def build_cal_ribbon(win, r):
         [B.small("Calendar Groups", "p-folder", na("Calendar Groups"), "G")],
     ])
     B.group(t, "Share", [[B.small("E-mail Calendar", "p-new-email", "email-calendar", "E"),
-                          B.small("Publish Online", "p-send-all", na("Publish Online"), "PO")]])
+                          B.small("Publish Online", "p-send-all", "out-of-scope:Publish Online", "PO")]])
     B.group(t, "Find", [[B.small("Search People", "p-search-people", "search-people", "FP"),
-                         B.small("Address Book", "p-address-book", na("Address Book"), "AB")]])
+                         B.small("Address Book", "p-address-book", "address-book", "AB")]])
     r.add_tab(t)
     t = r.building(Tab("Send / Receive", "S"))
     B.group(t, "Send & Receive", [B.big("Send/Receive All Folders", "p-send-receive", "send-receive", "A", tip="F9"),
@@ -97,14 +97,26 @@ class CalendarCommands:
     def switch_module(self, name):
         if name == self.module:
             return
+        if not hasattr(self, "mail_ribbon"):
+            self.mail_ribbon = self.ribbon
         self.module = name
         if name == "calendar":
             self.ensure_calendar()
             new = self.cal_ribbon
             self.search.set_placeholder_text("Search Calendar (Ctrl+E)")
+        elif name == "people":
+            self.ensure_people()
+            new = self.people_ribbon
+            self.search.set_placeholder_text("Search People (Ctrl+E)")
+        elif name == "tasks":
+            self.ensure_tasks()
+            new = self.tasks_ribbon
+            self.search.set_placeholder_text("Search Tasks (Ctrl+E)")
         else:
             new = self.mail_ribbon
             self.search.set_placeholder_text("Search Current Mailbox (Ctrl+E)")
+        if self.search.get_text():
+            self.search.set_text("")
         old = self.ribbon
         if new is not old:
             self.outer.remove(old)
@@ -116,9 +128,20 @@ class CalendarCommands:
         if name == "calendar":
             self.calview.refresh()
             self.calview.area.grab_focus()
-            self.set_title("Calendar - %s" % "Folio Post")
+            self.set_title("Calendar - Folio Post")
             self.title_label.set_text(self.get_title())
             self.update_cal_status(self.calview)
+        elif name == "tasks":
+            self.tasksview.refresh()
+            self.tasksview.tv.grab_focus()
+            self.set_title("Tasks - Folio Post")
+            self.title_label.set_text(self.get_title())
+        elif name == "people":
+            self.peopleview.refresh_books()
+            self.peopleview.refresh()
+            self.peopleview.tv.grab_focus()
+            self.set_title("Contacts - Folio Post")
+            self.title_label.set_text(self.get_title())
         else:
             self.update_title()
             self.update_status()

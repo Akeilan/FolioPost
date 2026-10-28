@@ -37,6 +37,16 @@ create table if not exists events (
   pending text default '', summary text default '', start integer default 0, until integer default 0);
 create index if not exists ev_cal on events(calendar);
 create index if not exists ev_uid on events(uid);
+create table if not exists books (
+  id integer primary key, account integer default 0, name text, kind text default 'local', url text default '',
+  ctag text default '', readonly integer default 0, position integer default 0);
+create table if not exists contacts (
+  id integer primary key, book integer, uid text, href text default '', etag text default '', vcard text,
+  pending text default '', name text default '', emails text default '', is_group integer default 0);
+create index if not exists ct_book on contacts(book);
+create table if not exists todos (
+  id integer primary key, kind text default 'task', uid text, data text, subject text default '', due integer default 0,
+  done integer default 0, modified integer default 0, color text default '');
 """
 
 FTS = "create virtual table if not exists msgfts using fts5(subject, sender, recipients, body, content='', tokenize='unicode61')"
@@ -449,3 +459,106 @@ class Store:
     def drop_event(self, eid):
         self.x("delete from events where id=?", (eid,))
         self.changed("events")
+
+
+    # ------------------------------------------------------------ address books
+    def add_book(self, name, kind="local", url="", account=0, readonly=False):
+        pos = (self.q("select max(position) m from books")[0]["m"] or 0) + 1
+        bid = self.x("insert into books(account, name, kind, url, readonly, position) values(?,?,?,?,?,?)",
+                     (account, name, kind, url, int(readonly), pos))
+        self.changed("books")
+        return bid
+
+    def books(self):
+        return [dict(r) for r in self.q("select * from books order by position, id")]
+
+    def book(self, bid):
+        r = self.q("select * from books where id=?", (bid,))
+        return dict(r[0]) if r else None
+
+    def update_book(self, bid, **kw):
+        cols = ", ".join("%s=?" % k for k in kw)
+        self.x("update books set %s where id=?" % cols, tuple(kw.values()) + (bid,))
+        self.changed("books")
+
+    def remove_book(self, bid):
+        self.x("delete from contacts where book=?", (bid,))
+        self.x("delete from books where id=?", (bid,))
+        self.changed("books")
+
+    def contacts(self, bid=None, with_deleted=False):
+        sql = "select * from contacts" + (" where book=?" if bid is not None else " where 1")
+        if not with_deleted:
+            sql += " and pending!='deleted'"
+        return [dict(r) for r in self.q(sql + " order by lower(name)", (bid,) if bid is not None else ())]
+
+    def contact(self, cid):
+        r = self.q("select * from contacts where id=?", (cid,))
+        return dict(r[0]) if r else None
+
+    def contact_by_uid(self, bid, uid):
+        r = self.q("select * from contacts where book=? and uid=?", (bid, uid))
+        return dict(r[0]) if r else None
+
+    def put_contact(self, bid, card, href="", etag="", pending="", cid=None):
+        from . import vcard
+        c = vcard.parse(card)
+        name = c.name if c else ""
+        emails = ",".join(e for _k, e in (c.emails if c else []))
+        grp = int(bool(c and c.is_group))
+        uid = c.uid if c else ""
+        if cid is None:
+            cid = self.x("insert into contacts(book, uid, href, etag, vcard, pending, name, emails, is_group) values(?,?,?,?,?,?,?,?,?)",
+                         (bid, uid, href, etag, card, pending, name, emails, grp))
+        else:
+            self.x("update contacts set book=?, uid=?, href=?, etag=?, vcard=?, pending=?, name=?, emails=?, is_group=? where id=?",
+                   (bid, uid, href, etag, card, pending, name, emails, grp, cid))
+        self.changed("contacts")
+        return cid
+
+    def set_contact_fields(self, cid, **kw):
+        cols = ", ".join("%s=?" % k for k in kw)
+        self.x("update contacts set %s where id=?" % cols, tuple(kw.values()) + (cid,))
+        self.changed("contacts")
+
+    def drop_contact(self, cid):
+        self.x("delete from contacts where id=?", (cid,))
+        self.changed("contacts")
+
+    def find_people(self, text, limit=50):
+        """Contacts and groups whose name or address starts a word with the text."""
+        t = (text or "").strip().lower()
+        if not t:
+            return []
+        like = "%" + t + "%"
+        rows = self.q("select * from contacts where pending!='deleted' and (lower(name) like ? or lower(emails) like ?) "
+                      "order by is_group desc, lower(name) limit ?", (like, like, limit))
+        return [dict(r) for r in rows]
+
+    # ------------------------------------------------------------ tasks and notes
+    def put_todo(self, kind, uid, data, subject="", due=0, done=0, color="", tid=None):
+        now = int(time.time())
+        if tid is None:
+            tid = self.x("insert into todos(kind, uid, data, subject, due, done, modified, color) values(?,?,?,?,?,?,?,?)",
+                         (kind, uid, data, subject, int(due or 0), int(done), now, color))
+        else:
+            self.x("update todos set kind=?, uid=?, data=?, subject=?, due=?, done=?, modified=?, color=? where id=?",
+                   (kind, uid, data, subject, int(due or 0), int(done), now, color, tid))
+        self.changed("todos")
+        return tid
+
+    def todos(self, kind="task"):
+        return [dict(r) for r in self.q("select * from todos where kind=? order by done, case when due=0 then 1 else 0 end, due, id",
+                                        (kind,))]
+
+    def todo(self, tid):
+        r = self.q("select * from todos where id=?", (tid,))
+        return dict(r[0]) if r else None
+
+    def drop_todo(self, tid):
+        self.x("delete from todos where id=?", (tid,))
+        self.changed("todos")
+
+    def flagged(self):
+        """Flagged messages, for the To-Do List."""
+        return [dict(r) for r in self.q("select * from messages where (flagged=1 or (done=1 and due>0)) and deleted=0 order by date desc")]

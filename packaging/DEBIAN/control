@@ -5,7 +5,7 @@ Priority: optional
 Architecture: all
 Installed-Size: 3000
 Depends: python3 (>= 3.10), python3-gi, python3-gi-cairo, gir1.2-gtk-3.0, librsvg2-common, libsqlite3-0, tzdata
-Recommends: gir1.2-secret-1, xdg-utils, fonts-crosextra-carlito
+Recommends: gir1.2-secret-1, xdg-utils, fonts-crosextra-carlito, pst-utils, libemail-outlook-message-perl
 Maintainer: Ron Shillings <ron.shillings@gmail.com>
 Description: ribbon mail program
  Folio Post is a mail program with a ribbon interface, KeyTips, a Folder

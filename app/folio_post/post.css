@@ -27,3 +27,6 @@
 .folio-folders, .folio-messages { background-color: #ffffff; color: #1a1a1a; }
 .folio-invitebar { background: #e8e8f3; border: 1px solid #b8b8e0; padding: 4px 8px; }
 .folio-cal-title { font-size: 12pt; }
+.folio-folderpane list row:selected, .folio-folderpane list row:selected label { background-color: #dcdcee; color: #1a1a1a; }
+.folio-folderpane list { background: #ffffff; }
+.folio-note, .folio-note text { background-color: #fff7b3; color: #1a1a1a; padding: 8px; }
