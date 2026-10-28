@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <!-- Folio Post: a blue folio with a letter -->
+  <rect x="28" y="20" width="200" height="216" rx="18" fill="#333366"/>
+  <rect x="28" y="20" width="200" height="216" rx="18" fill="none" stroke="#222244" stroke-width="6"/>
+  <rect x="50" y="72" width="156" height="112" rx="8" fill="#ffffff"/>
+  <path d="M54 78 128 136 202 78" fill="none" stroke="#333366" stroke-width="10" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M54 180 104 128M202 180 152 128" fill="none" stroke="#b8b8e0" stroke-width="6" stroke-linecap="round"/>
+  <rect x="160" y="38" width="44" height="26" rx="4" fill="#b8b8e0"/>
+  <rect x="166" y="44" width="32" height="14" rx="2" fill="#333366"/>
+</svg>

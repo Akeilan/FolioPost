@@ -1,0 +1,27 @@
+/* Folio Post — the mail panes */
+.folio-folderpane { background: #ffffff; border-right: 1px solid #e1e1e1; }
+.folio-folders, .folio-folders:selected { font-size: 9.5pt; }
+.folio-folders:selected { background: #dcdcee; color: #1a1a1a; }
+.folio-navbar { border-top: 1px solid #e1e1e1; padding: 2px; background: #f6f6f6; }
+.folio-navbar button { border: none; box-shadow: none; background: transparent; border-radius: 0; min-height: 30px; }
+.folio-navbar button:checked { background: #dcdcee; border-bottom: 2px solid #333366; }
+.folio-listpane { background: #ffffff; }
+.folio-listbar { border-bottom: 1px solid #e1e1e1; padding: 2px 6px; }
+.folio-listfilter { border: none; box-shadow: none; background: transparent; padding: 2px 8px; border-radius: 0; }
+.folio-listfilter:checked { border-bottom: 2px solid #333366; color: #333366; font-weight: bold; }
+.folio-messages { font-size: 9.5pt; }
+.folio-messages:selected { background: #dcdcee; color: #1a1a1a; }
+.folio-reading { background: #ffffff; border-left: 1px solid #e1e1e1; }
+.folio-reading-empty { color: #767676; }
+.folio-reading-subject { font-size: 14pt; }
+.folio-reading-sender { font-size: 10.5pt; }
+.folio-reading-recips, .folio-reading-date, .folio-reading-info { color: #555555; font-size: 9pt; }
+.folio-reading-btn { padding: 2px 6px; }
+.folio-infobar { background: #fff4ce; border: 1px solid #f3d872; padding: 4px 8px; }
+.folio-attachment { border: 1px solid #d6d6d6; border-radius: 2px; padding: 2px 6px; background: #fafafa; }
+.folio-compose-head { background: #ffffff; border-bottom: 1px solid #e1e1e1; }
+.folio-send { padding: 6px 14px; border: 1px solid #c8c8c8; background: #ffffff; }
+.folio-send:hover { background: #dcdcee; }
+.folio-editor, .folio-editor text { background: #ffffff; color: #1a1a1a; }
+.folio-message, .folio-message text { background: #ffffff; color: #1a1a1a; }
+.folio-folders, .folio-messages { background-color: #ffffff; color: #1a1a1a; }
