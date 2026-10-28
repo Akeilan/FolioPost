@@ -5,6 +5,11 @@ Reading Pane, and Outlook's keyboard shortcuts. Part of the Folio suite.
 
 - **Accounts:** Gmail (Google sign-in in the browser, or an app password), Proton Mail through Proton Mail
   Bridge, Yahoo, iCloud, Fastmail, GMX and any IMAP, POP3 and SMTP server.
+- **Calendar:** Day, Work Week, Week, Month; recurrence, reminders, meetings (iTIP by mail); two-way sync with
+  Google Calendar and CalDAV; read-only internet calendars such as Proton Calendar's share link.
+- **People and Tasks:** contacts and groups (vCard, Google Contacts, CardDAV), tasks, flagged mail on the To-Do
+  List, notes.
+- **Files:** .eml, .mbox, .pst/.ost (readpst), .msg (msgconvert), .ics, .vcf.
 - **Offline:** mail is kept on this computer (SQLite with full-text search); changes made offline go to the
   server at the next Send/Receive, new mail waits in the Outbox.
 - **Safe reading:** HTML mail is shown by Post's own renderer: no scripts, no remote pictures until you

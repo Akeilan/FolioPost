@@ -12,6 +12,8 @@ from .readingpane import ReadingPane, nice_size
 from .ribbon import Ribbon
 from .ribbon_post import CATEGORIES, build_ribbon, move_menu
 from .calcmds import CalendarCommands
+from .peoplecmds import PeopleCommands
+from .taskcmds import TaskCommands
 from .store import ROLE_NAMES
 
 DND_TARGET = "folio-post/messages"
@@ -74,7 +76,7 @@ class StatusBar(Gtk.Box):
         self.pack_end(self.right, True, True, 8)
 
 
-class PostWindow(CalendarCommands, Gtk.ApplicationWindow):
+class PostWindow(TaskCommands, PeopleCommands, CalendarCommands, Gtk.ApplicationWindow):
     def __init__(self, app):
         Gtk.ApplicationWindow.__init__(self, application=app)
         self.app = app
@@ -257,6 +259,17 @@ class PostWindow(CalendarCommands, Gtk.ApplicationWindow):
                 nodes[f["path"]] = it
                 if f["id"] == sel:
                     sel_it = it
+        sf = self.store.get("search-folders", []) or []
+        if sf:
+            top = self.folders_model.append(None, ["<b>Search Folders</b>", 0, 0, "p-filter", "search-root"])
+            for i, f in enumerate(sf):
+                rows = self.search_folder_rows(f)
+                unread = sum(1 for r in rows if not r["seen"])
+                name = GLib.markup_escape_text(f["name"])
+                label = "<b>%s</b> <span foreground='%s'>%d</span>" % (name, accent(), unread) if unread else name
+                it = self.folders_model.append(top, [label, -(i + 1), 0, "p-filter", "search"])
+                if -(i + 1) == sel:
+                    sel_it = it
         if first:
             self.folder_view.expand_all()
         else:
@@ -341,7 +354,35 @@ class PostWindow(CalendarCommands, Gtk.ApplicationWindow):
         return True
 
     def current_folder(self):
-        return self.store.folder(self.folder_id) if self.folder_id else None
+        return self.store.folder(self.folder_id) if self.folder_id and self.folder_id > 0 else None
+
+    SEARCH_KINDS = [("unread", "Unread mail"), ("flagged", "Mail flagged for follow up"), ("important", "Important mail"),
+                    ("attach", "Mail with attachments"), ("large", "Large mail (over 100 KB)"), ("from", "Mail from specific people"),
+                    ("words", "Mail with specific words"), ("categorized", "Categorized mail")]
+
+    def search_folder_rows(self, f):
+        """The messages a search folder shows, from every mail folder but Deleted Items, Junk and the Outbox."""
+        fids = [x["id"] for x in self.store.folders() if x["role"] not in ("trash", "junk", "outbox")]
+        if not fids:
+            return []
+        marks = ",".join("?" * len(fids))
+        kind, arg = f.get("kind"), (f.get("arg") or "").lower()
+        if kind == "words" and arg:
+            return self.store.search(arg, fids)
+        where = {"unread": "seen=0", "flagged": "flagged=1", "important": "importance=2", "attach": "attach=1",
+                 "large": "size>102400", "categorized": "categories!=''"}.get(kind)
+        args = list(fids)
+        if kind == "from":
+            people = [x.strip() for x in arg.replace(",", ";").split(";") if x.strip()]
+            if not people:
+                return []
+            where = "(" + " or ".join("lower(from_addr) like ? or lower(from_name) like ?" for _p in people) + ")"
+            for p_ in people:
+                args += ["%" + p_ + "%", "%" + p_ + "%"]
+        if where is None:
+            return []
+        return [dict(r) for r in self.store.q("select * from messages where deleted=0 and folder in (%s) and %s order by date desc"
+                                              % (marks, where), args)]
 
     def current_account(self):
         f = self.current_folder()
@@ -428,6 +469,10 @@ class PostWindow(CalendarCommands, Gtk.ApplicationWindow):
 
         def add(title, renderer, func, expand=False, width=None, sort=None):
             col = Gtk.TreeViewColumn(title)
+            if title in ("📎", "⚑"):
+                img = icons.image("p-attach" if title == "📎" else "p-flag", 16)
+                img.show()
+                col.set_widget(img)
             col.pack_start(renderer, True)
             col.set_cell_data_func(renderer, func)
             col.set_expand(expand)
@@ -453,8 +498,8 @@ class PostWindow(CalendarCommands, Gtk.ApplicationWindow):
             add("!", r, f, width=24, sort="importance")
             r, f = icon_cell("attach")
             add("📎", r, f, width=24, sort="attach")
-            for title, colno, key, w in (("From", C_FROM, "from", 180), ("Subject", C_SUBJ, "subject", None),
-                                         ("Received", C_DATE, "date", 110), ("Size", C_SIZE, "size", 70)):
+            for title, colno, key, w in (("From", C_FROM, "from", 150), ("Subject", C_SUBJ, "subject", None),
+                                         ("Received", C_DATE, "date", 100), ("Size", C_SIZE, "size", 60)):
                 tr = Gtk.CellRendererText()
                 tr.set_property("ellipsize", Pango.EllipsizeMode.END)
 
@@ -476,7 +521,7 @@ class PostWindow(CalendarCommands, Gtk.ApplicationWindow):
                 cats = [c for c in m[it][C_CATS].split(",") if c]
                 cell.set_property("markup", " ".join("<span foreground='#%s'>■</span>" % CAT_COLORS.get(c, "808080")
                                                      for c in cats))
-            add("Categories", cr, fc, width=80, sort="categories")
+            add("Categories", cr, fc, width=50, sort="categories")
             r, f = icon_cell("flag")
             add("⚑", r, f, width=26, sort="flag")
         else:
@@ -529,6 +574,10 @@ class PostWindow(CalendarCommands, Gtk.ApplicationWindow):
             acc = self.current_account()
             fids = [f["id"] for f in self.store.folders(acc["id"])] if acc else None
             rows = self.store.search(self.search_text, fids)
+        elif self.folder_id and self.folder_id < 0:
+            sf = self.store.get("search-folders", []) or []
+            i = -self.folder_id - 1
+            rows = self.search_folder_rows(sf[i]) if i < len(sf) else []
         elif self.folder_id:
             rows = self.store.messages(self.folder_id)
         else:
@@ -788,7 +837,8 @@ class PostWindow(CalendarCommands, Gtk.ApplicationWindow):
                   None, ("Junk", [("Block Sender", "block-sender"), ("Never Block Sender", "never-block"), ("Not Junk", "not-junk")]),
                   ("Delete", "delete"), ("Archive...", "archive"), None,
                   ("Move", move_menu(self)), ("Rules", [("Always Move Messages From This Sender...", "rule-from")]),
-                  None, ("Save As...", "save-as"), ("Open in New Window", "open-item")]:
+                  None, ("Add Sender to Contacts", "add-sender-to-contacts"), ("Save As...", "save-as"),
+                  ("Open in New Window", "open-item")]:
             if x is None:
                 menu.append(Gtk.SeparatorMenuItem())
             elif isinstance(x[1], list):
@@ -833,7 +883,7 @@ class PostWindow(CalendarCommands, Gtk.ApplicationWindow):
         return False
 
     def update_title(self):
-        if self.module == "calendar":
+        if self.module in ("calendar", "people", "tasks"):
             return
         f = self.current_folder()
         acc = self.current_account()
@@ -853,6 +903,10 @@ class PostWindow(CalendarCommands, Gtk.ApplicationWindow):
     def update_status(self):
         if self.module == "calendar" and self.calview is not None:
             return self.update_cal_status(self.calview)
+        if self.module == "people" and self.peopleview is not None:
+            return self.update_people_status(self.peopleview)
+        if self.module == "tasks" and self.tasksview is not None:
+            return self.update_tasks_status(self.tasksview)
         n = len(getattr(self, "rows", []))
         unread = sum(1 for r in getattr(self, "rows", []) if not r["seen"])
         sel = len(self.selected_ids())
@@ -955,7 +1009,9 @@ class PostWindow(CalendarCommands, Gtk.ApplicationWindow):
         self.not_available("not-available:" + label)
 
     def act_out_of_scope(self, label):
-        self.dialogs.info("“%s” isn't part of %s." % (label, APP_NAME))
+        self.dialogs.info("“%s” isn't part of %s: it has no cloud of its own to publish to. E-mail Calendar sends "
+                          "it to people instead." % (label, APP_NAME) if label == "Publish Online" else
+                          "“%s” isn't part of %s." % (label, APP_NAME))
 
     def focus_document(self):
         self.list_view.grab_focus()
@@ -981,8 +1037,12 @@ class PostWindow(CalendarCommands, Gtk.ApplicationWindow):
 
     # ---- new
     def act_new_email(self):
+        if self.module == "tasks":
+            return self.act_new_task()
         if self.module == "calendar":
             return self.act_new_appointment()
+        if self.module == "people":
+            return self.act_new_contact()
         acc = self.current_account()
         self.app.compose(account=acc["id"] if acc else None)
 
@@ -1549,6 +1609,19 @@ class PostWindow(CalendarCommands, Gtk.ApplicationWindow):
         text = entry.get_text().strip()
         if self.module == "calendar":
             return self.search_calendar(text)
+        if self.module == "people":
+            v = self.ensure_people()
+            v.filter = text
+            v.refresh()
+            return None
+        if self.module == "tasks":
+            v = self.ensure_tasks()
+            if text:
+                for row in v.model:
+                    if text.lower() in row[1].lower():
+                        v.select_keys([row[0]])
+                        break
+            return None
         if text.lower().startswith("from:"):
             text = text[5:].strip()
         if text == self.search_text:
@@ -1689,6 +1762,8 @@ class PostWindow(CalendarCommands, Gtk.ApplicationWindow):
         self.refresh_folders()
 
     def act_delete_folder(self):
+        if self.folder_id and self.folder_id < 0:
+            return self.act_delete_search_folder()
         f = self.current_folder()
         if not f:
             return
@@ -1707,19 +1782,121 @@ class PostWindow(CalendarCommands, Gtk.ApplicationWindow):
         self.folder_id = inbox["id"] if inbox else None
         self._do_refresh()
 
-    def act_copy_folder(self):
-        self.not_available("not-available:Copy Folder")
+    def _folder_dest(self, title):
+        """A parent for a folder: another folder of the same account, or the account's top."""
+        f = self.current_folder()
+        if not f or f["role"]:
+            self.dialogs.info("Select one of your own folders first; special folders like the Inbox stay where they are.")
+            return None, None
+        dest = self.choose_folder(title)
+        if dest is None:
+            return f, None
+        return f, self.store.folder(dest)
 
     def act_move_folder(self):
-        self.not_available("not-available:Move Folder")
+        f, dest = self._folder_dest("Move Folder")
+        if not f or not dest:
+            return None
+        if dest["account"] != f["account"]:
+            return self.dialogs.info("A folder moves within its own account. Use Copy Folder to copy it to another.")
+        if dest["id"] == f["id"] or dest["path"].startswith(f["path"] + f["delim"]):
+            return self.dialogs.info("A folder can't go inside itself.")
+        d = f["delim"] or "/"
+        newpath = dest["path"] + d + f["name"] if dest["role"] != "inbox" or True else f["name"]
+        acc = self.store.account(f["account"])
+        if acc["kind"] == "imap":
+            try:
+                self.app.syncer.server_op(acc["id"], lambda c: c.rename(f["path"], newpath))
+            except Exception as e:
+                return self.dialogs.message("The server didn't move the folder: %s" % e)
+        for sub in self.store.folders(acc["id"]):
+            if sub["path"] == f["path"] or sub["path"].startswith(f["path"] + d):
+                p_ = newpath + sub["path"][len(f["path"]):]
+                self.store.x("update folders set path=?, parent=? where id=?", (p_, d.join(p_.split(d)[:-1]), sub["id"]))
+        self.store.changed("folders")
+        self.refresh_folders()
+        return newpath
 
-    def act_new_search_folder(self):
-        self.not_available("not-available:New Search Folder")
+    def act_copy_folder(self):
+        f, dest = self._folder_dest("Copy Folder")
+        if not f or not dest:
+            return None
+        acc = self.store.account(dest["account"])
+        d = dest["delim"] or "/"
+        path = dest["path"] + d + f["name"]
+        have = {x["path"] for x in self.store.folders(acc["id"])}
+        k = 2
+        while path in have:
+            path = "%s%s%s (%d)" % (dest["path"], d, f["name"], k)
+            k += 1
+        if acc["kind"] == "imap":
+            try:
+                self.app.syncer.server_op(acc["id"], lambda c: c.create(path))
+            except Exception as e:
+                return self.dialogs.message("The server didn't make the folder: %s" % e)
+        nid = self.store.ensure_folder(acc["id"], path, "", d)
+        self.copy_to([m["id"] for m in self.store.messages(f["id"])], nid)
+        self.refresh_folders()
+        return nid
+
+    def act_new_search_folder(self, spec=None):
+        """spec: 'kind' or 'kind:argument' (tests); otherwise the New Search Folder box."""
+        if spec is None:
+            d = Gtk.Dialog(title="New Search Folder", transient_for=self, modal=True)
+            d.get_style_context().add_class("folio-dialog")
+            box = d.get_content_area()
+            box.set_border_width(12)
+            box.set_spacing(4)
+            box.pack_start(Gtk.Label(label="Select a Search Folder:", xalign=0), False, False, 0)
+            first = None
+            radios = {}
+            for k, label in self.SEARCH_KINDS:
+                r = Gtk.RadioButton.new_with_label_from_widget(first, label)
+                first = first or r
+                radios[k] = r
+                box.pack_start(r, False, False, 0)
+            arg = Gtk.Entry()
+            arg.set_placeholder_text("people or words (for the last choices)")
+            box.pack_start(arg, False, False, 6)
+            d.add_button("Cancel", Gtk.ResponseType.CANCEL)
+            d.add_button("OK", Gtk.ResponseType.OK)
+            d.show_all()
+            ok = d.run() == Gtk.ResponseType.OK
+            kind = [k for k, r in radios.items() if r.get_active()][0]
+            text = arg.get_text().strip()
+            d.destroy()
+            if not ok:
+                return None
+        else:
+            kind, _, text = spec.partition(":")
+        if kind in ("from", "words") and not text:
+            return self.dialogs.info("Type the people or the words to look for.")
+        name = dict(self.SEARCH_KINDS).get(kind, kind)
+        if text:
+            name = ("From " if kind == "from" else "Containing ") + text
+        sf = self.store.get("search-folders", []) or []
+        sf.append({"name": name, "kind": kind, "arg": text})
+        self.store.put("search-folders", sf)
+        self.refresh_folders()
+        self.go_folder(-len(sf))
+        return -len(sf)
+
+    def act_delete_search_folder(self):
+        if not self.folder_id or self.folder_id > 0:
+            return
+        sf = self.store.get("search-folders", []) or []
+        i = -self.folder_id - 1
+        if i < len(sf):
+            del sf[i]
+            self.store.put("search-folders", sf)
+        self.select_first_inbox()
+        self.refresh_folders()
 
     def act_mark_all_read(self):
         if not self.folder_id:
             return
-        ids = [m["id"] for m in self.store.messages(self.folder_id) if not m["seen"]]
+        src = self.list_rows() if self.folder_id < 0 else self.store.messages(self.folder_id)
+        ids = [m["id"] for m in src if not m["seen"]]
         self.mark_read(ids, True)
 
     def act_delete_all(self):
@@ -1848,13 +2025,14 @@ class PostWindow(CalendarCommands, Gtk.ApplicationWindow):
     def act_go(self, where):
         if getattr(self, "_nav_quiet", False):
             return
-        if where in ("mail", "calendar"):
+        if where == "notes":
+            self.switch_module("tasks")
+            v = self.tasksview
+            v.folders.select_row(v.folders.get_row_at_index(2))
+            return
+        if where in ("mail", "calendar", "people", "tasks"):
             self.switch_module(where)
             return
-        self._nav_quiet = True
-        for k, b in self.nav_buttons.items():
-            b.set_active(k == self.module)
-        self._nav_quiet = False
         self.not_available("not-available:" + where.capitalize())
 
     def act_go_folder(self):
@@ -1867,7 +2045,11 @@ class PostWindow(CalendarCommands, Gtk.ApplicationWindow):
         with open(path, "rb") as fh:
             raw = fh.read()
         if path.lower().endswith(".msg"):
-            return self.not_available("not-available:Outlook .msg files")
+            from .importexport import msg_to_eml
+            try:
+                raw = msg_to_eml(path)
+            except Exception as e:
+                return self.dialogs.message("Folio Post couldn't open “%s”: %s" % (os.path.basename(path), e))
         from .msgwindow import MessageWindow
         w = MessageWindow(self, None, raw=raw, path=path)
         w.present()
@@ -1943,8 +2125,9 @@ class PostWindow(CalendarCommands, Gtk.ApplicationWindow):
         from .options import signatures_dialog
         signatures_dialog(self)
 
-    def act_import_export(self):
-        self.not_available("not-available:Import/Export")
+    def act_import_export(self, choice=None, path=None):
+        from .importexport import import_export
+        return import_export(self, choice, path)
 
     def act_exit(self):
         self.app.quit()
@@ -1979,8 +2162,9 @@ class PostWindow(CalendarCommands, Gtk.ApplicationWindow):
         ("", "F9"): "send-receive", ("shift", "F9"): "update-folder", ("ctrl", "z"): "undo", ("ctrl", "p"): "print",
         ("ctrl", "s"): "save-as", ("ctrl", "o"): "open-item", ("ctrl+shift", "e"): "new-folder", ("ctrl", "y"): "go-folder",
         ("ctrl", "1"): "go:mail", ("ctrl", "2"): "go:calendar", ("ctrl", "3"): "go:people", ("ctrl", "4"): "go:tasks",
-        ("ctrl", "5"): "go:notes", ("", "Insert"): "flag:toggle", ("ctrl+alt", "j"): "not-junk", ("", "F1"): "help",
-        ("ctrl+shift", "b"): "not-available:Address Book", ("ctrl", "c"): "copy", ("ctrl+shift", "m"): "new-email",
+        ("ctrl", "5"): "go:notes", ("ctrl+shift", "k"): "new-task", ("ctrl+shift", "n"): "new-note",
+        ("ctrl+shift", "c"): "new-contact", ("ctrl+shift", "a"): "new-appointment", ("ctrl+shift", "q"): "new-meeting", ("", "Insert"): "flag:toggle", ("ctrl+alt", "j"): "not-junk", ("", "F1"): "help",
+        ("ctrl+shift", "b"): "address-book", ("ctrl", "c"): "copy", ("ctrl+shift", "m"): "new-email",
         ("shift", "Delete"): "delete-permanently",
     }
 
@@ -2009,6 +2193,23 @@ class PostWindow(CalendarCommands, Gtk.ApplicationWindow):
             return True
         if typing and (mods in ("", "shift") or (mods == "ctrl" and key in ("c", "v", "x", "a", "z"))):
             return False
+        if self.module == "tasks":
+            tcmd = {("ctrl", "n"): "new-task", ("ctrl+shift", "n"): "new-note", ("ctrl", "o"): "open-task",
+                    ("ctrl", "d"): "delete-task", ("", "Delete"): "delete-task", ("", "Insert"): "mark-complete"}.get((mods, key))
+            if tcmd and not typing:
+                self.run(tcmd)
+                return True
+            if (mods, key) in (("", "BackSpace"), ("ctrl", "r"), ("ctrl+shift", "r"), ("ctrl", "f")):
+                return False
+        if self.module == "people":
+            pcmd = {("ctrl", "n"): "new-contact", ("ctrl+shift", "l"): "new-contact-group", ("ctrl", "o"): "open-contact",
+                    ("ctrl", "d"): "delete-contact", ("", "Delete"): "delete-contact", ("ctrl", "r"): "contact-email",
+                    ("ctrl", "f"): "forward-contact"}.get((mods, key))
+            if pcmd and not typing:
+                self.run(pcmd)
+                return True
+            if (mods, key) in (("", "BackSpace"), ("", "Insert"), ("ctrl+shift", "r")):
+                return False
         if self.module == "calendar":
             ccmd = {("ctrl+alt", "1"): "cal-view:day", ("ctrl+alt", "2"): "cal-view:workweek", ("ctrl+alt", "3"): "cal-view:week",
                     ("ctrl+alt", "4"): "cal-view:month", ("ctrl", "g"): "cal-go-to", ("ctrl+shift", "q"): "new-meeting",
