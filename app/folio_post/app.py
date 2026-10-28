@@ -42,6 +42,10 @@ class PostApp(Gtk.Application):
         self.tokens = TokenSource(self.store, self.secrets)
         self.syncer = Syncer(self.store, self.secrets, self.tokens)
         self.syncer.offline = bool(self.settings.get("offline"))
+        from .caldav import CalendarSync
+        from .reminders import Reminders
+        self.calsync = CalendarSync(self.store, self.secrets, self.tokens)
+        self.reminders = Reminders(self)
         self.queue = []
         self.queue_lock = threading.Lock()
         self.queue_event = threading.Event()
@@ -111,7 +115,10 @@ class PostApp(Gtk.Application):
         aids = aids or [a["id"] for a in self.store.accounts() if a["kind"] != "local"]
 
         def job():
-            return [self.syncer.sync_account(a, folders) for a in aids]
+            r = [self.syncer.sync_account(a, folders) for a in aids]
+            if folders is None and not self.syncer.offline:
+                self.calsync.sync_all()
+            return r
 
         def finished(r, e):
             for w in list(self.windows):
@@ -169,6 +176,8 @@ class PostApp(Gtk.Application):
         self._apply_dark(appearance.is_dark())
         appearance.on_change(self._apply_dark)
         self.schedule_sync()
+        if not os.environ.get("FOLIO_POST_NO_REMINDERS"):
+            self.reminders.start()
 
     def _apply_dark(self, dark):
         screen = Gdk.Screen.get_default()

@@ -29,6 +29,14 @@ create table if not exists outbox (
   id integer primary key, account integer, raw blob, rcpts text, created integer, tries integer default 0,
   error text default '', send_at integer default 0);
 create table if not exists kv (k text primary key, v text);
+create table if not exists calendars (
+  id integer primary key, account integer default 0, name text, color text default '', kind text default 'local',
+  url text default '', ctag text default '', readonly integer default 0, shown integer default 1, position integer default 0);
+create table if not exists events (
+  id integer primary key, calendar integer, uid text, href text default '', etag text default '', ics text,
+  pending text default '', summary text default '', start integer default 0, until integer default 0);
+create index if not exists ev_cal on events(calendar);
+create index if not exists ev_uid on events(uid);
 """
 
 FTS = "create virtual table if not exists msgfts using fts5(subject, sender, recipients, body, content='', tokenize='unicode61')"
@@ -377,3 +385,67 @@ class Store:
     def send_failed(self, oid, error):
         self.x("update outbox set tries=tries+1, error=? where id=?", (str(error)[:500], oid))
         self.changed("outbox")
+
+    # ------------------------------------------------------------ calendars
+    def add_calendar(self, name, color="", kind="local", url="", account=0, readonly=False):
+        pos = (self.q("select max(position) m from calendars")[0]["m"] or 0) + 1
+        cid = self.x("insert into calendars(account, name, color, kind, url, readonly, position) values(?,?,?,?,?,?,?)",
+                     (account, name, color, kind, url, int(readonly), pos))
+        self.changed("calendars")
+        return cid
+
+    def calendars(self, account=None):
+        rows = self.q("select * from calendars" + (" where account=?" if account is not None else "") +
+                      " order by position, id", (account,) if account is not None else ())
+        return [dict(r) for r in rows]
+
+    def calendar(self, cid):
+        r = self.q("select * from calendars where id=?", (cid,))
+        return dict(r[0]) if r else None
+
+    def update_calendar(self, cid, **kw):
+        cols = ", ".join("%s=?" % k for k in kw)
+        self.x("update calendars set %s where id=?" % cols, tuple(kw.values()) + (cid,))
+        self.changed("calendars")
+
+    def remove_calendar(self, cid):
+        self.x("delete from events where calendar=?", (cid,))
+        self.x("delete from calendars where id=?", (cid,))
+        self.changed("calendars")
+
+    def events(self, cid=None, with_deleted=False):
+        sql = "select * from events" + (" where calendar=?" if cid is not None else " where 1")
+        if not with_deleted:
+            sql += " and pending!='deleted'"
+        return [dict(r) for r in self.q(sql, (cid,) if cid is not None else ())]
+
+    def event(self, eid):
+        r = self.q("select * from events where id=?", (eid,))
+        return dict(r[0]) if r else None
+
+    def event_by_uid(self, cid, uid):
+        r = self.q("select * from events where calendar=? and uid=?", (cid, uid))
+        return dict(r[0]) if r else None
+
+    def event_by_href(self, cid, href):
+        r = self.q("select * from events where calendar=? and href=?", (cid, href))
+        return dict(r[0]) if r else None
+
+    def put_event(self, cid, uid, ics, href="", etag="", pending="", summary="", start=0, until=0, eid=None):
+        if eid is None:
+            eid = self.x("insert into events(calendar, uid, href, etag, ics, pending, summary, start, until) values(?,?,?,?,?,?,?,?,?)",
+                         (cid, uid, href, etag, ics, pending, summary, int(start), int(until)))
+        else:
+            self.x("update events set calendar=?, uid=?, href=?, etag=?, ics=?, pending=?, summary=?, start=?, until=? where id=?",
+                   (cid, uid, href, etag, ics, pending, summary, int(start), int(until), eid))
+        self.changed("events")
+        return eid
+
+    def set_event_fields(self, eid, **kw):
+        cols = ", ".join("%s=?" % k for k in kw)
+        self.x("update events set %s where id=?" % cols, tuple(kw.values()) + (eid,))
+        self.changed("events")
+
+    def drop_event(self, eid):
+        self.x("delete from events where id=?", (eid,))
+        self.changed("events")

@@ -138,6 +138,25 @@ class ReadingPane(Gtk.Box):
         self.info.set_line_wrap(True)
         hd.pack_start(self.info, False, False, 0)
         self.content.pack_start(hd, False, False, 0)
+        # meeting requests
+        self.invite = Gtk.Box(spacing=6)
+        self.invite.get_style_context().add_class("folio-invitebar")
+        self.invite.set_margin_start(16)
+        self.invite.set_margin_end(16)
+        self.invite_label = Gtk.Label(xalign=0)
+        self.invite_label.set_line_wrap(True)
+        self.invite.pack_start(icons.image("p-nav-calendar", 16), False, False, 0)
+        self.invite.pack_start(self.invite_label, True, True, 0)
+        self.invite_buttons = {}
+        for key, label in (("ACCEPTED", "✓ Accept"), ("TENTATIVE", "? Tentative"), ("DECLINED", "✗ Decline"),
+                           ("remove", "Remove from Calendar")):
+            b = Gtk.Button(label=label)
+            b.connect("clicked", lambda _b, k=key: self.answer_invite(k))
+            self.invite.pack_end(b, False, False, 0)
+            self.invite_buttons[key] = b
+        self.invite.set_no_show_all(True)
+        self.content.pack_start(self.invite, False, False, 2)
+        self.invite_ics = None
         # remote pictures
         self.bar = Gtk.EventBox()
         bb = Gtk.Box(spacing=8)
@@ -260,9 +279,91 @@ class ReadingPane(Gtk.Box):
             self.att_box.add(b)
         self.att_box.set_visible(bool(shown))
         self.att_box.show_all()
+        self.show_invite(msg)
         self.render()
         self.stack.set_visible_child_name("message")
         self.scroller.get_vadjustment().set_value(0)
+
+    def calendar_part(self, msg):
+        for p in msg.walk():
+            if p.is_multipart():
+                continue
+            ct = p.get_content_type()
+            if ct == "text/calendar" or (ct in ("application/ics", "application/octet-stream") and
+                                         (p.get_filename() or "").lower().endswith(".ics")):
+                try:
+                    data = p.get_payload(decode=True) or b""
+                except Exception:
+                    continue
+                text = data.decode("utf-8", "replace")
+                if "BEGIN:VCALENDAR" in text:
+                    return text
+        return None
+
+    def show_invite(self, msg):
+        from . import ical
+        self.invite_ics = None
+        self.invite.set_visible(False)
+        text = self.calendar_part(msg)
+        if not text:
+            return
+        cal = ical.parse(text)
+        evs = ical.events_of(cal)
+        method = (cal.get("METHOD", "") if cal else "").upper()
+        if not evs or method not in ("REQUEST", "CANCEL", "REPLY"):
+            return
+        e = evs[0]
+        self.invite_ics = text
+        self.invite_method = method
+        when = ""
+        if e.start:
+            s = e.start.astimezone(ical.local_tz())
+            when = s.strftime("%A, %d %B %Y") + ("" if e.all_day else s.strftime(" %H:%M") +
+                                                   (e.end or e.start).astimezone(ical.local_tz()).strftime("–%H:%M"))
+        main = getattr(self.win, "main", self.win)
+        mine = main.find_event(e.uid) if hasattr(main, "find_event") else None
+        for k, b in self.invite_buttons.items():
+            b.set_visible((method == "REQUEST" and k != "remove") or (method == "CANCEL" and k == "remove" and mine is not None))
+            b.set_no_show_all(not b.get_visible())
+        if method == "REQUEST":
+            state = ""
+            if mine is not None:
+                st = main.my_status(mine)
+                state = {"ACCEPTED": " You accepted.", "TENTATIVE": " You tentatively accepted.",
+                         "DECLINED": " You declined."}.get(st, " It's in your calendar.")
+            txt = "<b>%s</b>\n%s%s%s" % (GLib.markup_escape_text(e.summary or "Meeting"), GLib.markup_escape_text(when),
+                                         (" · " + GLib.markup_escape_text(e.location)) if e.location else "", state)
+        elif method == "CANCEL":
+            txt = "<b>This meeting was canceled.</b> %s" % GLib.markup_escape_text(e.summary)
+            if mine is None:
+                txt += " It isn't in your calendar."
+        else:
+            who = e.attendees[0] if e.attendees else {"name": "", "email": "", "status": ""}
+            verb = {"ACCEPTED": "accepted", "TENTATIVE": "tentatively accepted", "DECLINED": "declined"}.get(who["status"], "answered")
+            txt = "<b>%s %s.</b> %s" % (GLib.markup_escape_text(who["name"] or who["email"]), verb, GLib.markup_escape_text(e.summary))
+            if hasattr(main, "record_reply"):
+                main.record_reply(e)
+        self.invite_label.set_markup(txt)
+        self.invite.set_no_show_all(False)
+        self.invite.show_all()
+        for k, b in self.invite_buttons.items():
+            if b.get_no_show_all():
+                b.hide()
+
+    def answer_invite(self, how):
+        main = getattr(self.win, "main", self.win)
+        if self.invite_ics is None or not hasattr(main, "respond_to_invitation"):
+            return
+        acc = None
+        if self.row is not None:
+            f = main.store.folder(self.row["folder"])
+            acc = main.store.account(f["account"]) if f else None
+        if how == "remove":
+            main.remove_canceled(self.invite_ics)
+        else:
+            main.respond_to_invitation(self.invite_ics, how, acc)
+        if self.msg is not None:
+            self.show_invite(self.msg)
 
     def _sender(self):
         frm = mime.addresses(self.msg, "From") if self.msg is not None else []
