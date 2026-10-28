@@ -293,7 +293,7 @@ class ComposeWindow(Gtk.Window):
               B.small(None, "alignright", "align:right", "AR", tip="Align Right (Ctrl+R)", state="align-right")]],
         ], launcher="font-dialog")
         B.group(t, "Names", [
-            [B.small("Address Book", "p-address-book", na("Address Book"), "AB"),
+            [B.small("Address Book", "p-address-book", "address-book", "AB"),
              B.small("Check Names", "p-check-names", "check-names", "M", tip="Check Names (Ctrl+K)")],
         ])
         B.group(t, "Include", [
@@ -402,10 +402,24 @@ class ComposeWindow(Gtk.Window):
                 names[k] = [n, a]
             elif n and not names[k][0]:
                 names[k][0] = n
+        # contacts first: the address book's names win
+        for r in self.store.contacts():
+            if r["is_group"]:
+                model.prepend([r["name"], (r["name"] + " group").lower()])
+                continue
+            for a in [x for x in (r["emails"] or "").split(",") if x]:
+                k = a.lower()
+                if k in names:
+                    order.remove(k)
+                names[k] = [r["name"], a]
+                order.insert(0, k)
         for k in order:
             n, a = names[k]
             model.append(["%s <%s>" % (n, a) if n else a, (n + " " + a).lower()])
         return model
+
+    def groups(self):
+        return {r["name"].lower(): r for r in self.store.contacts() if r["is_group"]}
 
     def _current_token(self, entry):
         text = entry.get_text()
@@ -441,10 +455,14 @@ class ComposeWindow(Gtk.Window):
             if n:
                 known.setdefault(n.lower(), (n, a))
         bad = []
+        groups = self.groups()
         for k in ([key] if key else ["to", "cc", "bcc"]):
             out = []
             changed = False
             for n, a in self.recipients(k):
+                if not a and n.lower() in groups:
+                    out.append((n, a))
+                    continue
                 if not a:
                     hit = known.get(n.lower())
                     if hit is None:
@@ -464,7 +482,25 @@ class ComposeWindow(Gtk.Window):
         return not bad
 
     def pick_names(self, key):
-        self.fields[key].grab_focus()
+        from .contactwin import select_names
+        got = select_names(self, "Select Names: Contacts", ["To", "Cc", "Bcc"])
+        if not got:
+            return
+        for k in ("To", "Cc", "Bcc"):
+            items = got.get(k) or []
+            if not items:
+                continue
+            e = self.fields[k.lower()]
+            cur = e.get_text().strip()
+            if cur and not cur.endswith(";"):
+                cur += ";"
+            add = []
+            for kind, name, value in items:
+                add.append(name if kind == "group" else ("%s <%s>" % (name, value) if name else value))
+            e.set_text((cur + " " if cur else "") + "; ".join(add) + "; ")
+            if k == "Bcc":
+                for w in self.bcc_row:
+                    w.show()
 
     def account(self):
         aid = self.from_combo.get_active_id()
@@ -647,6 +683,14 @@ class ComposeWindow(Gtk.Window):
         if acc and acc["name"] == acc["email"]:
             sender = ("", acc["email"])
         to, cc, bcc = self.recipients("to"), self.recipients("cc"), self.recipients("bcc")
+        groups = self.groups()
+        if groups:
+            from .contactwin import expand_groups
+
+            def ex(xs):
+                return expand_groups(self.store, [("", "group:%d" % groups[n.lower()]["id"]) if (not a and n.lower() in groups)
+                                                  else (n, a) for n, a in xs])
+            to, cc, bcc = ex(to), ex(cc), ex(bcc)
         fix = lambda xs: [(n, a) if a else ("", n) for n, a in xs]  # noqa: E731
         subject = self.subject.get_text()
         body_html, pics = self.editor.to_html()
@@ -998,6 +1042,9 @@ class ComposeWindow(Gtk.Window):
             self.editor.set_char("italic", fd.get_style() != Pango.Style.NORMAL)
         d.destroy()
 
+    def act_address_book(self):
+        self.pick_names("to")
+
     def act_check_names(self):
         if self.check_names():
             self.status.set_text("  All names are recognized.")
@@ -1165,10 +1212,12 @@ class ComposeWindow(Gtk.Window):
                               Gdk.KEY_k: "insert-link", Gdk.KEY_z: "undo", Gdk.KEY_y: "redo", Gdk.KEY_space: "clear-formatting",
                               Gdk.KEY_m: "indent", Gdk.KEY_v: "paste"})
                 if shift:
-                    table = {Gdk.KEY_L: "bullets", Gdk.KEY_greater: "grow", Gdk.KEY_less: "shrink", Gdk.KEY_M: "outdent",
+                    table = {Gdk.KEY_B: "address-book", Gdk.KEY_L: "bullets", Gdk.KEY_greater: "grow", Gdk.KEY_less: "shrink", Gdk.KEY_M: "outdent",
                              Gdk.KEY_period: "grow", Gdk.KEY_comma: "shrink", Gdk.KEY_V: "paste-text"}
             else:
                 table[Gdk.KEY_k] = "check-names"
+                if shift:
+                    table = {Gdk.KEY_B: "address-book"}
             cmd = table.get(k)
             if cmd:
                 self.run(cmd)

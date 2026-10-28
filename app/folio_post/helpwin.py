@@ -18,8 +18,20 @@ Alt+S. Unsent messages are saved in Drafts every few minutes.
 <b>Working offline.</b> Everything you've received is kept on this computer. Send / Receive &gt; Work Offline keeps new
 mail in the Outbox until you go online again.
 
-<b>Organizing.</b> Drag messages to folders (hold Ctrl to copy). Flag (Insert), categorize, Quick Steps, rules, and
-the junk lists in Home &gt; Junk.
+<b>Organizing.</b> Drag messages to folders (hold Ctrl to copy). Flag (Insert), categorize, Quick Steps, rules, search
+folders, and the junk lists in Home &gt; Junk.
+
+<b>Calendar</b> (Ctrl+2). Day, Work Week, Week and Month (Ctrl+Alt+1 to 4). Double-click to make an appointment, drag to
+move it. Google Calendar comes with a Gmail account added with Google sign-in; other calendars through Open Calendar:
+a CalDAV server, or an internet address (.ics), which is how Proton Calendar shares one (read-only).
+
+<b>People</b> (Ctrl+3). Contacts and contact groups; Google Contacts and CardDAV address books stay in step. The To,
+Cc and Bcc buttons in a message open the Select Names box.
+
+<b>Tasks</b> (Ctrl+4) and <b>Notes</b> (Ctrl+5). Tasks and flagged mail on the To-Do List.
+
+<b>Files.</b> File &gt; Open &amp; Export: .eml, .mbox, Outlook .pst and .ost (needs pst-utils), .msg (needs
+libemail-outlook-message-perl), .ics and .vcf.
 """
 
 SHORTCUTS = [
@@ -30,7 +42,9 @@ SHORTCUTS = [
     ("Go to folder", "Ctrl+Y"), ("New folder", "Ctrl+Shift+E"), ("Search", "Ctrl+E / F3"),
     ("Send/Receive all folders", "F9"), ("Update folder", "Shift+F9"), ("Next / previous item", "Ctrl+. / Ctrl+,"),
     ("Open item", "Enter / Ctrl+O"), ("Print", "Ctrl+P"), ("Save as", "Ctrl+S"), ("Undo", "Ctrl+Z"),
-    ("Mail, Calendar, People, Tasks", "Ctrl+1 … Ctrl+4"), ("KeyTips", "Alt / F10"), ("Check names (in To)", "Ctrl+K"),
+    ("Mail, Calendar, People, Tasks, Notes", "Ctrl+1 … Ctrl+5"), ("New appointment / meeting", "Ctrl+Shift+A / Ctrl+Shift+Q"),
+    ("New contact / task / note", "Ctrl+Shift+C / Ctrl+Shift+K / Ctrl+Shift+N"), ("Address Book", "Ctrl+Shift+B"),
+    ("Calendar views", "Ctrl+Alt+1 … Ctrl+Alt+4"), ("Go to date", "Ctrl+G"), ("KeyTips", "Alt / F10"), ("Check names (in To)", "Ctrl+K"),
     ("Hyperlink (in the message)", "Ctrl+K"), ("Bold, italic, underline", "Ctrl+B, Ctrl+I, Ctrl+U"),
     ("Bullets", "Ctrl+Shift+L"), ("Align left / center / right", "Ctrl+L / Ctrl+E / Ctrl+R"),
 ]

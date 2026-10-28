@@ -75,7 +75,9 @@ def create_account(win, name, email, cfg, secret=None, oauth_tokens=None, kind="
             ids = win.app.calsync.add_google(aid)
             for i in ids:
                 win.app.calsync.sync(i)
-        win.app.background(cal_job, lambda *_: win._after_calendars())
+            for b in win.app.contactsync.add_google(aid):
+                win.app.contactsync.sync(b)
+        win.app.background(cal_job, lambda *_: (win._after_calendars(), win._after_books()))
     if not win.app.syncer.offline:
         def done(*_):
             win.refresh_folders()
@@ -628,6 +630,52 @@ class CalDavDialog(Gtk.Dialog):
                 return False
             self.result = ids
             self.win._after_calendars()
+            self.destroy()
+            return False
+        threading.Thread(target=work, daemon=True).start()
+
+
+class CardDavDialog(CalDavDialog):
+    """Address books from a CardDAV server."""
+
+    def __init__(self, win):
+        CalDavDialog.__init__(self, win)
+        self.set_title("Open Address Book from a Server")
+        acc = win.current_account()
+        dom = (acc["email"].split("@")[-1] if acc else "").lower()
+        self.url.set_text({"fastmail.com": "https://carddav.fastmail.com/dav/", "icloud.com": "https://contacts.icloud.com/",
+                           "me.com": "https://contacts.icloud.com/"}.get(dom, ""))
+
+    def on_response(self, d, resp):
+        if self.busy:
+            return
+        if resp != Gtk.ResponseType.OK:
+            self.destroy()
+            return
+        url, user, pw = self.url.get_text().strip(), self.user.get_text().strip(), self.password.get_text()
+        if not url.startswith(("http://", "https://")):
+            self.msg.set_text("Type the whole address, starting with https://")
+            return
+        self.busy = True
+        self.msg.set_text("Connecting...")
+
+        def work():
+            try:
+                ids = self.win.app.contactsync.add_carddav(url, user, pw)
+                for i in ids:
+                    self.win.app.contactsync.sync(i)
+                err = None if ids else "No address books were found at that address."
+            except Exception as e:
+                ids, err = [], "Couldn't open the address books: %s" % e
+            GLib.idle_add(done, ids, err)
+
+        def done(ids, err):
+            self.busy = False
+            if err:
+                self.msg.set_markup("<span foreground='#c42b1c'>%s</span>" % GLib.markup_escape_text(err))
+                return False
+            self.result = ids
+            self.win._after_books()
             self.destroy()
             return False
         threading.Thread(target=work, daemon=True).start()

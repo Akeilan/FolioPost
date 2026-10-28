@@ -293,6 +293,135 @@ for k in range(2):
         ew.destroy()
     except Exception:
         pass
+# ---------------------------------------------------------------- people and tasks
+from folio_post import vcard as VC, carddav as CRD, tasks as TK  # noqa: E402
+win.run("go:people")
+pv = win.peopleview
+bid = pv.current_book()["id"]
+
+
+def people_state(k):
+    if win.module != "people":
+        win.run("go:people")
+    if not store.contacts():
+        CRD.save_contact(store, bid, VC.new_contact("Walk Person", "walk@example.org"))
+        CRD.save_contact(store, bid, VC.new_group("Walk Group", ["walk@example.org"]))
+    pv.book_id = None
+    pv.refresh()
+    if k == 0 and len(pv.model):
+        pv.select_ids([pv.model[0][0]])
+    elif k == 1:
+        pv.tv.get_selection().unselect_all()
+
+
+ppl_cmds = commands(win.people_ribbon, ["open-contact", "add-sender-to-contacts", "people-folder-pane:off", "people-folder-pane:normal"])
+ppl_cmds = [c for c in ppl_cmds if c != "delete-address-book"] + ["delete-address-book"]
+for cmd in ppl_cmds:
+    for k, resp in enumerate((Gtk.ResponseType.OK, Gtk.ResponseType.CANCEL, Gtk.ResponseType.OK)):
+        people_state(k)
+        answer[0] = resp
+        try:
+            win.run(cmd)
+        except Exception:
+            ERRORS.append("people " + cmd + ": " + traceback.format_exc())
+        for w in Gtk.Window.list_toplevels():
+            if type(w).__name__ in ("ContactWindow", "EventWindow", "TaskWindow", "NoteWindow") or isinstance(w, Gtk.Dialog):
+                try:
+                    w.modified = False
+                    w.destroy()
+                except Exception:
+                    pass
+        cleanup()
+        if not store.books():
+            bid = store.add_book("Contacts", "local")
+            win._after_books()
+        ran += 1
+from folio_post.contactwin import ContactWindow  # noqa: E402
+ct_cmds = None
+for grp in (False, True):
+    people_state(1)
+    cwn = ContactWindow(win, group=grp, name="Walk")
+    pump(0.1)
+    cmds_here = commands(cwn.ribbon, ["save", "save-as", "close", "add-member-address"])
+    cmds_here = [c for c in cmds_here if c not in ("delete", "save-close", "save-new")] + ["save-new", "save-close"]
+    ct_cmds = (ct_cmds or []) + [c for c in cmds_here if c not in (ct_cmds or [])]
+    for cmd in cmds_here:
+        if not cwn.get_visible():
+            cwn = ContactWindow(win, group=grp, name="Walk")
+            pump(0.05)
+        if not grp:
+            cwn.f["email0"].set_text("w@example.org")
+        try:
+            cwn.run(cmd)
+        except Exception:
+            ERRORS.append("contact " + cmd + ": " + traceback.format_exc())
+        for w in Gtk.Window.list_toplevels():
+            if type(w).__name__ == "ContactWindow" and w is not cwn:
+                w.modified = False
+                w.destroy()
+        cleanup(keep=(cwn,))
+        ran += 1
+    try:
+        cwn.modified = False
+        cwn.destroy()
+    except Exception:
+        pass
+win.run("go:tasks")
+tv = win.tasksview
+
+
+def tasks_state(k):
+    if win.module != "tasks":
+        win.run("go:tasks")
+    tv.folders.select_row(tv.folders.get_row_at_index(0))
+    if not store.todos("task"):
+        TK.save(store, TK.new_task("Walk task"))
+    tv.view = "simple"
+    tv.refresh()
+    if k == 0 and len(tv.model):
+        tv.select_keys([tv.model[0][0]])
+    elif k == 1:
+        tv.tv.get_selection().unselect_all()
+
+
+tk_cmds = commands(win.tasks_ribbon, ["open-task", "tasks-folder-pane:off", "tasks-folder-pane:normal", "go:notes"])
+for cmd in tk_cmds:
+    for k, resp in enumerate((Gtk.ResponseType.OK, Gtk.ResponseType.CANCEL, Gtk.ResponseType.OK)):
+        tasks_state(k)
+        answer[0] = resp
+        try:
+            win.run(cmd)
+        except Exception:
+            ERRORS.append("tasks " + cmd + ": " + traceback.format_exc())
+        for w in Gtk.Window.list_toplevels():
+            if type(w).__name__ in ("ContactWindow", "EventWindow", "TaskWindow", "NoteWindow") or isinstance(w, Gtk.Dialog):
+                try:
+                    w.modified = False
+                    w.destroy()
+                except Exception:
+                    pass
+        cleanup()
+        ran += 1
+from folio_post.taskcmds import TaskWindow  # noqa: E402
+tw_cmds = None
+tw = TaskWindow(win, subject="walk")
+pump(0.1)
+tw_cmds = commands(tw.ribbon, ["save", "close"])
+tw_cmds = [c for c in tw_cmds if c not in ("delete", "save-close", "mark-complete")] + ["mark-complete", "save-close", "delete"]
+for cmd in tw_cmds:
+    if not tw.get_visible():
+        tw = TaskWindow(win, subject="walk")
+        pump(0.05)
+    try:
+        tw.run(cmd)
+    except Exception:
+        ERRORS.append("task window " + cmd + ": " + traceback.format_exc())
+    cleanup(keep=(tw,))
+    ran += 1
+try:
+    tw.destroy()
+except Exception:
+    pass
 win.run("go:mail")
 wait(lambda: not app.busy(), 20)
 
@@ -300,11 +429,12 @@ missing = sorted(set(c.split(":", 1)[1] if c.startswith("not-available:") else c
                      for c in win.missing_log))
 out = os.environ.get("WALK_OUT", "/tmp/post-command-walk.tsv")
 with open(out, "w") as f:
-    for where, cmds in (("main", main_cmds), ("message", mw_cmds), ("compose", cw_cmds), ("calendar", cal_cmds), ("appointment", ew_cmds)):
+    for where, cmds in (("main", main_cmds), ("message", mw_cmds), ("compose", cw_cmds), ("calendar", cal_cmds), ("appointment", ew_cmds),
+                        ("people", ppl_cmds), ("contact", ct_cmds), ("tasks", tk_cmds), ("task", tw_cmds)):
         for c in cmds:
             status = "NOT_YET" if c.startswith("not-available:") else "OK"
             f.write("%s\t%s\t%s\n" % (where, c, status))
-ALL = (main_cmds, mw_cmds, cw_cmds, cal_cmds, ew_cmds)
+ALL = (main_cmds, mw_cmds, cw_cmds, cal_cmds, ew_cmds, ppl_cmds, ct_cmds, tk_cmds, tw_cmds)
 print("commands:", sum(len(x) for x in ALL), "runs:", ran)
 print("not available yet:", len([1 for cmds in ALL for c in cmds if c.startswith("not-available:")]))
 print("unavailable in use:", missing)

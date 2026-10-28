@@ -87,8 +87,10 @@ def categories_menu():
 
 
 def follow_up_menu():
-    return [("Flag Message", "flag:on", "p-flag"), ("Mark Complete", "flag:done", "p-flag-done"),
-            ("Clear Flag", "flag:off")]
+    return [("Today", "flag-due:today", "p-flag"), ("Tomorrow", "flag-due:tomorrow", "p-flag"),
+            ("This Week", "flag-due:this-week", "p-flag"), ("Next Week", "flag-due:next-week", "p-flag"),
+            ("No Date", "flag-due:none", "p-flag"), None, ("Flag Message", "flag:on", "p-flag"),
+            ("Mark Complete", "flag:done", "p-flag-done"), ("Clear Flag", "flag:off")]
 
 
 def filter_menu():
@@ -114,7 +116,7 @@ def build_ribbon(win):
     B.group(t, "New", [
         B.big("New Email", "p-new-email", "new-email", "N",
               menu=[("E-mail Message", "new-email", "p-new-email"), ("Meeting", "new-meeting", "p-meeting"),
-                    ("Contact", na("Contact")), ("Task", na("Task")), None,
+                    ("Contact", "new-contact"), ("Task", "new-task"), None,
                     ("Folder...", "new-folder", "p-new-folder")],
               tip="New Email (Ctrl+N)"),
     ])
@@ -152,7 +154,7 @@ def build_ribbon(win):
     ])
     B.group(t, "Find", [
         [B.small("Search People", "p-search-people", "search-people", "FP"),
-         B.small("Address Book", "p-address-book", na("Address Book"), "AB", tip="Address Book (Ctrl+Shift+B)"),
+         B.small("Address Book", "p-address-book", "address-book", "AB", tip="Address Book (Ctrl+Shift+B)"),
          B.small("Filter Email", "p-filter", None, "L", menu=filter_menu())],
     ])
     B.group(t, "Send/Receive", [

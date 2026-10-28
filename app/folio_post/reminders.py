@@ -53,6 +53,18 @@ class Reminders:
                         continue
                     if s - dt.timedelta(minutes=m) <= now < en:
                         out.append((key, e.summary or "(No subject)", s, e.location))
+        # tasks with a reminder time
+        from . import tasks as T
+        for r in self.store.todos("task"):
+            t = T.parse(r["data"])
+            if t is None or t.done or t.reminder is None:
+                continue
+            key = "%s|task" % t.uid
+            v = st.get(key)
+            if v == "dismissed" or (isinstance(v, (int, float)) and v > time.time()):
+                continue
+            if t.reminder <= now:
+                out.append((key, t.subject or "(No subject)", t.reminder.astimezone(ical.local_tz()), ""))
         out.sort(key=lambda x: x[2])
         return out
 
