@@ -215,16 +215,98 @@ for k in range(2):
     cleanup()
 wait(lambda: not app.busy(), 20)
 
+# ---------------------------------------------------------------- calendar
+import datetime as dt  # noqa: E402
+from folio_post import ical, caldav as CD  # noqa: E402
+win.run("go:calendar")
+pump(0.2)
+v = win.calview
+cid = v.default_calendar()["id"]
+L = ical.local_tz()
+
+
+def cal_state(k):
+    if win.module != "calendar":
+        win.run("go:calendar")
+    v.go(dt.date(2026, 11, 3))
+    if not v.instances:
+        CD.save_event(store, cid, [ical.new_event("Walk", dt.datetime(2026, 11, 3, 10, tzinfo=L), dt.datetime(2026, 11, 3, 11, tzinfo=L))])
+        CD.save_event(store, cid, [ical.new_event("Series", dt.datetime(2026, 11, 2, 9, tzinfo=L), dt.datetime(2026, 11, 2, 10, tzinfo=L),
+                                                  rrule="FREQ=DAILY;COUNT=5")])
+        win.calendar_changed()
+    v.selected = v.instances[0] if (k == 0 and v.instances) else None
+    v.slot = (dt.datetime(2026, 11, 4, 9, tzinfo=L), dt.datetime(2026, 11, 4, 10, tzinfo=L)) if k == 2 else None
+    for r in v.cal_list.get_children():
+        if getattr(r, "cal_id", None) == cid:
+            v.cal_list.select_row(r)
+
+
+cal_cmds = commands(win.cal_ribbon, ["open-event", "open-event:series", "open-event:occurrence", "delete-event:occurrence",
+                                     "event-busy:free", "cal-prev", "cal-next", "cal-go-to", "new-all-day", "cal-folder-pane:off",
+                                     "cal-folder-pane:normal"])
+cal_cmds = [c for c in cal_cmds if c not in ("delete-calendar",)] + ["delete-event", "delete-calendar"]
+for cmd in cal_cmds:
+    for k, resp in enumerate((Gtk.ResponseType.OK, Gtk.ResponseType.CANCEL, Gtk.ResponseType.OK)):
+        cal_state(k)
+        answer[0] = resp
+        try:
+            win.run(cmd)
+        except Exception:
+            ERRORS.append("calendar " + cmd + ": " + traceback.format_exc())
+        for w in Gtk.Window.list_toplevels():
+            if type(w).__name__ in ("EventWindow", "ReminderWindow") or isinstance(w, Gtk.Dialog):
+                try:
+                    w.modified = False
+                    w.destroy()
+                except Exception:
+                    pass
+        cleanup()
+        if not store.calendars():
+            store.add_calendar("Calendar", "#0078D4", "local")
+            cid = store.calendars()[0]["id"]
+            win._after_calendars()
+        ran += 1
+# the appointment window
+from folio_post.eventwin import EventWindow  # noqa: E402
+cal_state(1)
+ew_cmds = None
+for k in range(2):
+    ew = EventWindow(win, start=dt.datetime(2026, 11, 5, 9, tzinfo=L), end=dt.datetime(2026, 11, 5, 10, tzinfo=L), calendar=cid)
+    pump(0.1)
+    if ew_cmds is None:
+        ew_cmds = commands(ew.ribbon, ["save", "save-as", "close", "send-invitation"])
+        ew_cmds = [c for c in ew_cmds if c not in ("delete", "save-close")] + ["save-close"]
+    for cmd in ew_cmds:
+        if not ew.get_visible():
+            ew = EventWindow(win, start=dt.datetime(2026, 11, 5, 9, tzinfo=L), end=dt.datetime(2026, 11, 5, 10, tzinfo=L), calendar=cid)
+            pump(0.05)
+        ew.subject.set_text("walk")
+        answer[0] = (Gtk.ResponseType.OK, Gtk.ResponseType.CANCEL)[k]
+        try:
+            ew.run(cmd)
+        except Exception:
+            ERRORS.append("appointment " + cmd + ": " + traceback.format_exc())
+        cleanup(keep=(ew,))
+        ran += 1
+    try:
+        ew.modified = False
+        ew.destroy()
+    except Exception:
+        pass
+win.run("go:mail")
+wait(lambda: not app.busy(), 20)
+
 missing = sorted(set(c.split(":", 1)[1] if c.startswith("not-available:") else c
                      for c in win.missing_log))
 out = os.environ.get("WALK_OUT", "/tmp/post-command-walk.tsv")
 with open(out, "w") as f:
-    for where, cmds in (("main", main_cmds), ("message", mw_cmds), ("compose", cw_cmds)):
+    for where, cmds in (("main", main_cmds), ("message", mw_cmds), ("compose", cw_cmds), ("calendar", cal_cmds), ("appointment", ew_cmds)):
         for c in cmds:
             status = "NOT_YET" if c.startswith("not-available:") else "OK"
             f.write("%s\t%s\t%s\n" % (where, c, status))
-print("commands:", len(main_cmds) + len(mw_cmds) + len(cw_cmds), "runs:", ran)
-print("not available yet:", len([1 for cmds in (main_cmds, mw_cmds, cw_cmds) for c in cmds if c.startswith("not-available:")]))
+ALL = (main_cmds, mw_cmds, cw_cmds, cal_cmds, ew_cmds)
+print("commands:", sum(len(x) for x in ALL), "runs:", ran)
+print("not available yet:", len([1 for cmds in ALL for c in cmds if c.startswith("not-available:")]))
 print("unavailable in use:", missing)
 stop()
 if ERRORS:

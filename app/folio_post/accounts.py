@@ -69,6 +69,13 @@ def create_account(win, name, email, cfg, secret=None, oauth_tokens=None, kind="
     elif secret is not None:
         win.app.secrets.set(aid, secret)
     win.refresh_folders()
+    if oauth_tokens is not None and cfg.get("imap_host") == "imap.gmail.com" and not win.app.syncer.offline:
+        # the same Google sign-in opens Google Calendar
+        def cal_job():
+            ids = win.app.calsync.add_google(aid)
+            for i in ids:
+                win.app.calsync.sync(i)
+        win.app.background(cal_job, lambda *_: win._after_calendars())
     if not win.app.syncer.offline:
         def done(*_):
             win.refresh_folders()
@@ -548,3 +555,79 @@ class AccountSettings(Gtk.Dialog):
 
 def account_settings(win, aid=None):
     return AccountSettings(win, aid)
+
+
+CALDAV_PRESETS = {"fastmail.com": "https://caldav.fastmail.com/dav/", "icloud.com": "https://caldav.icloud.com/",
+                  "me.com": "https://caldav.icloud.com/", "gmx.net": "https://caldav.gmx.net/", "gmx.com": "https://caldav.gmx.com/",
+                  "yahoo.com": "https://caldav.calendar.yahoo.com/", "zoho.com": "https://calendar.zoho.com/caldav/"}
+
+
+class CalDavDialog(Gtk.Dialog):
+    """Calendars from a CalDAV server (Fastmail, iCloud, Nextcloud, Radicale, ...)."""
+
+    def __init__(self, win):
+        Gtk.Dialog.__init__(self, title="Open Calendar from a Server", transient_for=win, modal=True)
+        self.win = win
+        self.get_style_context().add_class("folio-dialog")
+        box = self.get_content_area()
+        box.set_border_width(16)
+        box.set_spacing(6)
+        lab = Gtk.Label(xalign=0)
+        lab.set_markup("Your calendar provider's CalDAV address, with your user name and password (an app password where "
+                       "the provider asks for one).")
+        lab.set_line_wrap(True)
+        lab.set_max_width_chars(60)
+        box.pack_start(lab, False, False, 4)
+        acc = win.current_account()
+        dom = (acc["email"].split("@")[-1] if acc else "").lower()
+        self.url = Gtk.Entry(text=CALDAV_PRESETS.get(dom, ""))
+        self.url.set_placeholder_text("https://example.org/remote.php/dav/")
+        self.user = Gtk.Entry(text=acc["email"] if acc else "")
+        self.password = Gtk.Entry(visibility=False)
+        for label, w in (("Server address", self.url), ("User name", self.user), ("Password", self.password)):
+            box.pack_start(Gtk.Label(label=label, xalign=0), False, False, 0)
+            box.pack_start(w, False, False, 0)
+        self.msg = Gtk.Label(xalign=0)
+        self.msg.set_line_wrap(True)
+        box.pack_start(self.msg, False, False, 6)
+        self.add_button("Cancel", Gtk.ResponseType.CANCEL)
+        ok = self.add_button("Connect", Gtk.ResponseType.OK)
+        ok.get_style_context().add_class("folio-default")
+        self.result = None
+        self.busy = False
+        self.connect("response", self.on_response)
+        self.show_all()
+
+    def on_response(self, d, resp):
+        if self.busy:
+            return
+        if resp != Gtk.ResponseType.OK:
+            self.destroy()
+            return
+        url, user, pw = self.url.get_text().strip(), self.user.get_text().strip(), self.password.get_text()
+        if not url.startswith(("http://", "https://")):
+            self.msg.set_text("Type the whole address, starting with https://")
+            return
+        self.busy = True
+        self.msg.set_text("Connecting...")
+
+        def work():
+            try:
+                ids = self.win.app.calsync.add_caldav(url, user, pw)
+                for i in ids:
+                    self.win.app.calsync.sync(i)
+                err = None if ids else "No calendars were found at that address."
+            except Exception as e:
+                ids, err = [], "Couldn't open the calendars: %s" % e
+            GLib.idle_add(done, ids, err)
+
+        def done(ids, err):
+            self.busy = False
+            if err:
+                self.msg.set_markup("<span foreground='#c42b1c'>%s</span>" % GLib.markup_escape_text(err))
+                return False
+            self.result = ids
+            self.win._after_calendars()
+            self.destroy()
+            return False
+        threading.Thread(target=work, daemon=True).start()

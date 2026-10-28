@@ -11,6 +11,7 @@ from .dialogs import Dialogs
 from .readingpane import ReadingPane, nice_size
 from .ribbon import Ribbon
 from .ribbon_post import CATEGORIES, build_ribbon, move_menu
+from .calcmds import CalendarCommands
 from .store import ROLE_NAMES
 
 DND_TARGET = "folio-post/messages"
@@ -73,7 +74,7 @@ class StatusBar(Gtk.Box):
         self.pack_end(self.right, True, True, 8)
 
 
-class PostWindow(Gtk.ApplicationWindow):
+class PostWindow(CalendarCommands, Gtk.ApplicationWindow):
     def __init__(self, app):
         Gtk.ApplicationWindow.__init__(self, application=app)
         self.app = app
@@ -129,7 +130,10 @@ class PostWindow(Gtk.ApplicationWindow):
         self.ribbon.connect("file-clicked", lambda *_: self.show_backstage())
         self.outer.pack_start(self.ribbon, False, False, 0)
         self.body = Gtk.Paned()
-        self.outer.pack_start(self.body, True, True, 0)
+        self.modules = Gtk.Stack()
+        self.modules.set_transition_type(Gtk.StackTransitionType.NONE)
+        self.modules.add_named(self.body, "mail")
+        self.outer.pack_start(self.modules, True, True, 0)
         self.build_folder_pane()
         self.build_list()
         self.reading = ReadingPane(self)
@@ -286,6 +290,7 @@ class PostWindow(Gtk.ApplicationWindow):
         if self.folder_id != fid:
             self.folder_id = fid
             self.refresh_list()
+        self.update_title()
 
     def _folder_selected(self, sel):
         if getattr(self, "_quiet_folder", False):
@@ -828,6 +833,8 @@ class PostWindow(Gtk.ApplicationWindow):
         return False
 
     def update_title(self):
+        if self.module == "calendar":
+            return
         f = self.current_folder()
         acc = self.current_account()
         if self.search_text:
@@ -844,6 +851,8 @@ class PostWindow(Gtk.ApplicationWindow):
         self.set_title(" - ".join(parts))
 
     def update_status(self):
+        if self.module == "calendar" and self.calview is not None:
+            return self.update_cal_status(self.calview)
         n = len(getattr(self, "rows", []))
         unread = sum(1 for r in getattr(self, "rows", []) if not r["seen"])
         sel = len(self.selected_ids())
@@ -972,6 +981,8 @@ class PostWindow(Gtk.ApplicationWindow):
 
     # ---- new
     def act_new_email(self):
+        if self.module == "calendar":
+            return self.act_new_appointment()
         acc = self.current_account()
         self.app.compose(account=acc["id"] if acc else None)
 
@@ -1536,6 +1547,8 @@ class PostWindow(Gtk.ApplicationWindow):
 
     def on_search(self, entry):
         text = entry.get_text().strip()
+        if self.module == "calendar":
+            return self.search_calendar(text)
         if text.lower().startswith("from:"):
             text = text[5:].strip()
         if text == self.search_text:
@@ -1543,6 +1556,22 @@ class PostWindow(Gtk.ApplicationWindow):
         self.search_text = text
         self.refresh_list(keep=False)
         self.update_title()
+
+    def search_calendar(self, text):
+        if len(text) < 2:
+            return
+        import datetime as dt
+        from . import ical
+        v = self.ensure_calendar()
+        now = dt.datetime.now(ical.local_tz())
+        hits = [i for i in v.load(now - dt.timedelta(days=365), now + dt.timedelta(days=730))
+                if text.lower() in (i.event.summary + " " + i.event.location + " " + i.event.description).lower()]
+        if hits:
+            nxt = [i for i in hits if i.end >= now] or hits
+            v.go(nxt[0].start.date())
+            v.selected = next((i for i in v.instances if i.row["id"] == nxt[0].row["id"] and i.start == nxt[0].start), None)
+            v.area.queue_draw()
+        self.status.left.set_text("Found: %d" % len(hits))
 
     def clear_search(self):
         self.search.set_text("")
@@ -1819,12 +1848,14 @@ class PostWindow(Gtk.ApplicationWindow):
     def act_go(self, where):
         if getattr(self, "_nav_quiet", False):
             return
+        if where in ("mail", "calendar"):
+            self.switch_module(where)
+            return
         self._nav_quiet = True
         for k, b in self.nav_buttons.items():
-            b.set_active(k == "mail")
+            b.set_active(k == self.module)
         self._nav_quiet = False
-        if where != "mail":
-            self.not_available("not-available:" + where.capitalize())
+        self.not_available("not-available:" + where.capitalize())
 
     def act_go_folder(self):
         fid = self.choose_folder("Go to Folder")
@@ -1978,6 +2009,18 @@ class PostWindow(Gtk.ApplicationWindow):
             return True
         if typing and (mods in ("", "shift") or (mods == "ctrl" and key in ("c", "v", "x", "a", "z"))):
             return False
+        if self.module == "calendar":
+            ccmd = {("ctrl+alt", "1"): "cal-view:day", ("ctrl+alt", "2"): "cal-view:workweek", ("ctrl+alt", "3"): "cal-view:week",
+                    ("ctrl+alt", "4"): "cal-view:month", ("ctrl", "g"): "cal-go-to", ("ctrl+shift", "q"): "new-meeting",
+                    ("ctrl", "n"): "new-appointment", ("ctrl", "o"): "open-event", ("ctrl", "d"): "delete-event",
+                    ("ctrl", "t"): "cal-today", ("shift", "F9"): "update-calendars"}.get((mods, key))
+            if ccmd:
+                self.run(ccmd)
+                return True
+            if focus is self.calview.area and self.calview.key(ev):
+                return True
+            if (mods, key) in (("ctrl", "r"), ("ctrl+shift", "r"), ("ctrl", "f"), ("", "Delete"), ("", "BackSpace"), ("", "Insert")):
+                return False
         cmd = self.SHORTCUTS.get((mods, key))
         if cmd is None and mods == "ctrl" and key in ("period", "comma"):
             ids = self.selected_ids()
