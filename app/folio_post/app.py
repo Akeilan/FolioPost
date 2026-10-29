@@ -310,6 +310,18 @@ def main(argv=None):
     if "--version" in argv:
         print("%s %s" % (APP_NAME, VERSION))
         return 0
+    if "--list-contacts" in argv:
+        from .merge import main_list
+        return main_list("--json" in argv)
+    if "--send-merge" in argv:
+        from .merge import main_send
+        i = argv.index("--send-merge")
+        if i + 1 >= len(argv):
+            print("usage: folio-post --send-merge FILE.json [--json]")
+            return 2
+        code = main_send(argv[i + 1], "--json" in argv)
+        sys.stdout.flush()
+        os._exit(code)
     if "--make-default" in argv:
         make_default()
         print("%s is now the default mail app." % APP_NAME)

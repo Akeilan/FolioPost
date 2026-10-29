@@ -220,8 +220,10 @@ def scheduling_assistant(ew, lookup=None, answer=None):
     d.destroy()
     ew.assistant = None
     if resp == Gtk.ResponseType.OK and new != s:
-        ew.start_row.set_value(new)
-        ew.end_row.set_value(new + (e - s))
+        from . import ical
+        lt = ical.local_tz()
+        ew.start_row.set_value(new.astimezone(lt))
+        ew.end_row.set_value((new + (e - s)).astimezone(lt))
         ew._dirty()
         return new
     return None
@@ -242,10 +244,71 @@ class Backlog3Commands:
         if bar is None:
             return on
         if on:
+            bar.set_no_show_all(False)
             bar.show_all()
         else:
             bar.hide()
         return on
+
+    # ---- RSS Feeds (M3-07)
+    def act_add_rss_feed(self, url=None):
+        from . import rss
+        if url is None:
+            url = self.dialogs.ask_text("New RSS Feed", "Enter the location of the RSS Feed you want to add:", "")
+        if not url or not url.strip():
+            return None
+        try:
+            fid, n = rss.Feeds(self.store).add(url)
+        except Exception as e:
+            self.dialogs.info("Folio Post couldn't add the feed.\n\n%s" % e, "New RSS Feed")
+            return None
+        self.refresh_folders()
+        self.go_folder(fid)
+        return fid
+
+    def act_remove_rss_feed(self):
+        from . import rss
+        f = self.current_folder()
+        feeds = rss.Feeds(self.store)
+        hit = [x for x in feeds.feeds() if f and x["folder"] == f["id"]]
+        if not hit:
+            self.dialogs.info("Select the folder of an RSS feed first.", "Remove RSS Feed")
+            return None
+        feeds.remove(hit[0]["url"])
+        self.refresh_folders()
+        return True
+
+    # ---- Outlook templates (M3-06)
+    def act_choose_form(self, path=None):
+        """New Items > Choose Form: a new message from an Outlook template (.oft)."""
+        if path is None:
+            dlg = Gtk.FileChooserDialog(title="Choose Form", transient_for=self, action=Gtk.FileChooserAction.OPEN)
+            dlg.add_buttons("Cancel", Gtk.ResponseType.CANCEL, "Open", Gtk.ResponseType.OK)
+            f = Gtk.FileFilter()
+            f.set_name("Outlook Templates (*.oft)")
+            f.add_pattern("*.oft")
+            f.add_pattern("*.OFT")
+            dlg.add_filter(f)
+            path = dlg.get_filename() if dlg.run() == Gtk.ResponseType.OK else None
+            dlg.destroy()
+        if not path:
+            return None
+        from . import msgfile
+        try:
+            fields = msgfile.read(open(path, "rb").read())
+        except Exception as e:
+            self.dialogs.message("Folio Post couldn't open the template “%s”.\n\n%s" % (path.rsplit("/", 1)[-1], e))
+            return None
+        join = lambda xs: "; ".join(("%s <%s>" % (n, a)) if n and n != a else a for n, a in xs)  # noqa: E731
+        c = self.app.compose(to=join(fields["to"]), cc=join(fields["cc"]), bcc=join(fields["bcc"]), subject=fields["subject"],
+                             body_text="" if fields["html"] else fields["text"], attach_data=fields["attachments"])
+        if fields["html"]:
+            c.editor.load_html(fields["html"])
+        c.importance = fields["importance"]
+        if hasattr(c, "sync_tags"):
+            c.sync_tags()
+        c.modified = False
+        return c
 
     # ---- other people's calendars
     def _accounts_for_sharing(self):

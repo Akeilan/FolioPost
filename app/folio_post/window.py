@@ -1129,7 +1129,7 @@ class PostWindow(Backlog3Commands, TaskCommands, PeopleCommands, CalendarCommand
         rf = self.store.folder_by_role(f["account"], role)
         if rf is None and role in ("trash", "archive", "junk"):
             acc = self.store.account(f["account"])
-            if acc["kind"] in ("local", "pop3"):
+            if acc["kind"] in ("local", "pop3", "rss"):
                 rf = {"id": self.store.ensure_folder(acc["id"], ROLE_NAMES[role], role)}
         return rf
 
@@ -2057,6 +2057,8 @@ class PostWindow(Backlog3Commands, TaskCommands, PeopleCommands, CalendarCommand
     def open_message_file(self, path):
         with open(path, "rb") as fh:
             raw = fh.read()
+        if path.lower().endswith(".oft"):
+            return self.act_choose_form(path)
         if path.lower().endswith(".msg"):
             from .importexport import msg_to_eml
             try:
@@ -2072,9 +2074,10 @@ class PostWindow(Backlog3Commands, TaskCommands, PeopleCommands, CalendarCommand
         dlg = Gtk.FileChooserDialog(title="Open Message", transient_for=self, action=Gtk.FileChooserAction.OPEN)
         dlg.add_buttons("Cancel", Gtk.ResponseType.CANCEL, "Open", Gtk.ResponseType.OK)
         flt = Gtk.FileFilter()
-        flt.set_name("Messages (*.eml, *.msg)")
+        flt.set_name("Messages (*.eml, *.msg, *.oft)")
         flt.add_pattern("*.eml")
         flt.add_pattern("*.msg")
+        flt.add_pattern("*.oft")
         dlg.add_filter(flt)
         path = dlg.get_filename() if dlg.run() == Gtk.ResponseType.OK else None
         dlg.destroy()

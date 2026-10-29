@@ -117,6 +117,7 @@ def build_ribbon(win):
         B.big("New Email", "p-new-email", "new-email", "N",
               menu=[("E-mail Message", "new-email", "p-new-email"), ("Meeting", "new-meeting", "p-meeting"),
                     ("Contact", "new-contact"), ("Task", "new-task"), None,
+                    ("Choose Form (Outlook Template)...", "choose-form"),
                     ("Folder...", "new-folder", "p-new-folder")],
               tip="New Email (Ctrl+N)"),
     ])
@@ -185,7 +186,9 @@ def build_ribbon(win):
 
     t = r.building(Tab("Folder", "O"))
     B.group(t, "New", [B.big("New Folder", "p-new-folder", "new-folder", "N", tip="New Folder (Ctrl+Shift+E)"),
-                       B.big("New Search Folder", "p-filter", "new-search-folder", "S")])
+                       B.big("New Search Folder", "p-filter", "new-search-folder", "S"),
+                       [B.small("New RSS Feed", "p-send-receive", "add-rss-feed", "RF", tip="Add a New RSS Feed"),
+                        B.small("Remove RSS Feed", "p-delete-folder", "remove-rss-feed", "RR")]])
     B.group(t, "Actions", [
         [B.small("Rename Folder", "p-rename-folder", "rename-folder", "RN"),
          B.small("Copy Folder", "p-folder", "copy-folder", "CF"),

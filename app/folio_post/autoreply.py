@@ -444,7 +444,7 @@ def dialog(win, acc=None):
     sync()
     d.show_all()
     d.views = views
-    d.on, d.timed, d.entries, d.subj = on, timed, entries, subj
+    d.on, d.off, d.timed, d.entries, d.subj = on, off, timed, entries, subj
     while True:
         resp = d.run()
         if resp != Gtk.ResponseType.OK:
