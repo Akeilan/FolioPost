@@ -42,6 +42,9 @@ class _Catch(http.server.BaseHTTPRequestHandler):
 
 
 def endpoints(provider):
+    stub = os.environ.get("FOLIO_POST_OAUTH_BASE")       # the tests' sign-in server
+    if stub:
+        return stub + "/auth", stub + "/token", (MS_SCOPES if provider == "microsoft" else GOOGLE_SCOPES)
     if provider == "microsoft":
         return MS_AUTH, MS_TOKEN, MS_SCOPES
     return GOOGLE_AUTH, GOOGLE_TOKEN, GOOGLE_SCOPES
@@ -92,7 +95,18 @@ def _serve(srv, timeout):
 
 
 def _open(url):
+    """The system's web browser (not an embedded one: Google refuses those, and security keys need the browser)."""
+    if os.environ.get("FOLIO_POST_TEST_BROWSER"):
+        # the tests: a "browser" that follows the sign-in page's redirect at once
+        threading.Thread(target=lambda: urllib.request.urlopen(url, timeout=30).read(), daemon=True).start()
+        return
     import subprocess
+    from gi.repository import Gio
+    try:
+        if Gio.AppInfo.launch_default_for_uri(url, None):
+            return
+    except Exception:
+        pass
     subprocess.Popen(["xdg-open", url])
 
 

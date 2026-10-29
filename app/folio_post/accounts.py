@@ -6,7 +6,7 @@ import pwd
 import threading
 import urllib.parse
 
-from gi.repository import GLib, Gtk
+from gi.repository import Gdk, GLib, Gtk
 
 from . import APP_NAME, imap, oauth
 
@@ -98,6 +98,140 @@ def create_account(win, name, email, cfg, secret=None, oauth_tokens=None, kind="
                 win.select_first_inbox()
         win.app.send_receive([aid], done=done)
     return aid
+
+
+def google_goa_account(email):
+    """The Online Accounts entry of this Google address, only when it gives a token (so it really works)."""
+    from . import goa
+    try:
+        if not goa.available():
+            return None
+        f = goa.find(email, "google")
+        if f is None or not f["mail"]:
+            return None
+        goa.token(f["id"])
+        return f
+    except Exception:
+        return None
+
+
+def read_google_client(data):
+    """(client id, secret) from the client_secret_*.json Google Cloud console gives for a Desktop app."""
+    import json as _j
+    d = _j.loads(data.decode("utf-8") if isinstance(data, bytes) else data)
+    c = d.get("installed") or d.get("web") or d
+    cid = c.get("client_id", "")
+    if not cid.endswith(".apps.googleusercontent.com"):
+        raise ValueError("this isn't an OAuth client file from Google (no client_id ending in .apps.googleusercontent.com)")
+    if "web" in d and "installed" not in d:
+        raise ValueError("this client is of type “Web application”; make one of type “Desktop app”")
+    return cid, c.get("client_secret", "")
+
+
+def save_google_client(store, data):
+    cid, sec = read_google_client(data)
+    store.put("google-client", {"id": cid, "secret": sec})
+    return cid
+
+
+GUIDE_STEPS = [
+    ("Open the <a href=\"https://console.cloud.google.com/projectcreate\">Google Cloud console</a> signed in with this Google "
+     "account and make a project (any name, for example “Folio Post”)."),
+    ("Turn on the APIs Post uses: <a href=\"https://console.cloud.google.com/apis/library/gmail.googleapis.com\">Gmail API</a>, "
+     "<a href=\"https://console.cloud.google.com/apis/library/caldav.googleapis.com\">CalDAV API</a>, "
+     "<a href=\"https://console.cloud.google.com/apis/library/calendar-json.googleapis.com\">Google Calendar API</a> and "
+     "<a href=\"https://console.cloud.google.com/apis/library/carddav.googleapis.com\">CardDAV API</a> (Enable on each)."),
+    ("On the <a href=\"https://console.cloud.google.com/apis/credentials/consent\">OAuth consent screen</a> choose "
+     "<b>External</b>, fill in the app name and your address, add the scopes for Gmail, Calendar and Contacts, then "
+     "<b>Publish app</b> so it says <b>In production</b> (otherwise Google signs you out every 7 days)."),
+    ("Under <a href=\"https://console.cloud.google.com/apis/credentials\">Credentials</a>: Create credentials &gt; "
+     "OAuth client ID &gt; Application type <b>Desktop app</b> &gt; Create."),
+    "Click <b>Download JSON</b> and drop the file below (or choose it).",
+]
+
+
+class GoogleClientGuide(Gtk.Box):
+    """The first-run steps for Google sign-in, and the place the downloaded client file goes."""
+
+    def __init__(self, dialog, on_ready):
+        Gtk.Box.__init__(self, orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        self.dialog, self.on_ready = dialog, on_ready
+        lab = Gtk.Label(xalign=0)
+        lab.set_line_wrap(True)
+        lab.set_max_width_chars(66)
+        lab.set_markup("<b>Sign in with Google</b> happens in your web browser, where security keys and passkeys work. "
+                       "Google wants each person's own app for this, made once (about five minutes):")
+        self.pack_start(lab, False, False, 0)
+        self.steps = []
+        for k, text in enumerate(GUIDE_STEPS):
+            row = Gtk.Box(spacing=8)
+            n = Gtk.Label(label="%d." % (k + 1), xalign=0, yalign=0)
+            n.set_width_chars(2)
+            t = Gtk.Label(xalign=0)
+            t.set_line_wrap(True)
+            t.set_max_width_chars(62)
+            t.set_markup(text)
+            row.pack_start(n, False, False, 0)
+            row.pack_start(t, True, True, 0)
+            self.pack_start(row, False, False, 0)
+            self.steps.append(t)
+        note = Gtk.Label(xalign=0)
+        note.set_line_wrap(True)
+        note.set_max_width_chars(66)
+        note.set_markup("<small>When you sign in, Google shows <i>Google hasn't verified this app</i> once: click "
+                        "<b>Advanced</b> &gt; <b>Go to … (unsafe)</b> / Continue. It's your own app, so that's expected.</small>")
+        self.pack_start(note, False, False, 0)
+        # the drop zone
+        self.drop = Gtk.EventBox()
+        self.drop.get_style_context().add_class("folio-dropzone")
+        inner = Gtk.Box(spacing=10)
+        inner.set_border_width(14)
+        self.drop_label = Gtk.Label(label="Drop client_secret_….json here")
+        inner.pack_start(self.drop_label, True, True, 0)
+        choose = Gtk.Button(label="Choose File...")
+        choose.connect("clicked", lambda *_: self.choose())
+        inner.pack_end(choose, False, False, 0)
+        self.drop.add(inner)
+        self.drop.drag_dest_set(Gtk.DestDefaults.ALL, [Gtk.TargetEntry.new("text/uri-list", 0, 0)], Gdk.DragAction.COPY)
+        self.drop.connect("drag-data-received", self._dropped)
+        self.pack_start(self.drop, False, False, 4)
+
+    def _dropped(self, _w, _ctx, _x, _y, data, _info, _time):
+        uris = data.get_uris() or []
+        if uris:
+            self.take_file(GLib.filename_from_uri(uris[0])[0])
+
+    def choose(self):
+        dlg = Gtk.FileChooserDialog(title="The client file from Google", transient_for=self.dialog,
+                                    action=Gtk.FileChooserAction.OPEN)
+        dlg.add_buttons("Cancel", Gtk.ResponseType.CANCEL, "Open", Gtk.ResponseType.OK)
+        f = Gtk.FileFilter()
+        f.set_name("Google client file (*.json)")
+        f.add_pattern("*.json")
+        dlg.add_filter(f)
+        dl = os.path.expanduser("~/Downloads")
+        if os.path.isdir(dl):
+            dlg.set_current_folder(dl)
+        path = dlg.get_filename() if dlg.run() == Gtk.ResponseType.OK else None
+        dlg.destroy()
+        if path:
+            self.take_file(path)
+
+    def take_file(self, path):
+        try:
+            with open(path, "rb") as fh:
+                save_google_client(self.dialog.win.store, fh.read())
+        except Exception as e:
+            self.dialog.say("<span foreground='#c42b1c'>%s</span>" % GLib.markup_escape_text(str(e)))
+            return False
+        self.drop_label.set_markup("<b>✓ Folio Post's Google sign-in is ready.</b>")
+        self.on_ready()
+        return True
+
+    def done(self):
+        for w in self.get_children():
+            if w is not self.drop:
+                w.hide()
 
 
 class AccountDialog(Gtk.Dialog):
@@ -208,17 +342,35 @@ class AccountDialog(Gtk.Dialog):
         self._oauth_page("microsoft", "Outlook.com", "microsoft", "Microsoft")
 
     def _oauth_page(self, page, title, provider, company):
-        """Google and Microsoft: the desktop's Online Accounts signs in, so nothing is typed here. Without it, Google
-        takes an app password; a client ID built into the package (or set in Options) allows the browser sign-in."""
+        """Google: "Sign in with Google" in the web browser (a client ID the user makes once, read from the file Google
+        gives), or Online Accounts when it already has this Google account working; an app password as the fallback.
+        Microsoft: Online Accounts, or the browser sign-in when a client ID is built in or set."""
         from . import goa
         self._clear()
         self.page = page
         self.provider = provider
         self._title(title, self.email)
-        self.use_goa = goa.available()
-        self.use_browser = not self.use_goa and bool(self.win.app.tokens.client(provider)[0])
         self.password_entry = None
-        if self.use_goa:
+        self.goa_found = None
+        if provider == "google":
+            self.goa_found = google_goa_account(self.email)
+            self.use_goa = self.goa_found is not None
+            self.use_browser = not self.use_goa
+        else:
+            self.use_goa = goa.available()
+            self.use_browser = not self.use_goa and bool(self.win.app.tokens.client(provider)[0])
+        if provider == "google":
+            if self.use_goa:
+                self._note("Your Google account is already signed in in Online Accounts. Connect, and that's all.")
+            else:
+                self.guide = None
+                if self.win.app.tokens.client("google")[0]:
+                    self._note("<b>Sign in with Google</b> opens Google's sign-in page in your web browser. Sign in there "
+                               "(security keys and passkeys work), allow Folio Post, and come back here.")
+                else:
+                    self.guide = GoogleClientGuide(self, on_ready=self._client_ready)
+                    self.box.pack_start(self.guide, False, False, 0)
+        elif self.use_goa:
             found = goa.find(self.email, provider)
             if found:
                 self._note("Your %s account is in Online Accounts. Connect, and that's all." % company)
@@ -234,7 +386,11 @@ class AccountDialog(Gtk.Dialog):
             self.box.pack_start(self.app_toggle, False, False, 0)
             pw_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
             lab = Gtk.Label(xalign=0)
-            lab.set_markup("<small>Make one at myaccount.google.com &gt; Security &gt; App passwords.</small>")
+            lab.set_markup("<small>Make one at <a href=\"https://myaccount.google.com/apppasswords\">myaccount.google.com "
+                           "&gt; Security &gt; App passwords</a> (it needs 2-Step Verification). Mail only: Calendar and "
+                           "Contacts need Sign in with Google.</small>")
+            lab.set_line_wrap(True)
+            lab.set_max_width_chars(64)
             pw_box.pack_start(lab, False, False, 0)
             self.password_entry = Gtk.Entry(visibility=False)
             self.password_entry.set_activates_default(True)
@@ -243,19 +399,23 @@ class AccountDialog(Gtk.Dialog):
             self.box.pack_start(pw_box, False, False, 0)
             self.pw_box = pw_box
             self.app_toggle.connect("clicked", lambda *_: (pw_box.show_all(), self.app_toggle.hide(),
-                                                           self.password_entry.grab_focus()))
+                                                           self.ok.set_label("Connect"), self.password_entry.grab_focus()))
         elif not self.use_goa and not self.use_browser:
             self._note("Microsoft lets other mail apps into Outlook.com only through its own sign-in, which Post reaches "
                        "through Settings &gt; Online Accounts. This computer doesn't have Online Accounts (package "
                        "gnome-online-accounts).")
         self._status()
-        self.ok.set_label("Connect")
+        self.ok.set_label("Sign in with Google" if provider == "google" and self.use_browser else "Connect")
         self.box.show_all()
         if provider == "google":
-            if self.use_goa or self.use_browser:
-                self.pw_box.hide()
-            else:
-                self.app_toggle.hide()
+            self.pw_box.hide()
+
+    def _client_ready(self):
+        """The Google client was read from its file: straight on to the sign-in."""
+        self.say("")
+        if self.guide is not None:
+            self.guide.done()
+        self.next_gmail()
 
     def next_gmail(self):
         self._next_oauth(dict(GMAIL), "google")
@@ -271,6 +431,11 @@ class AccountDialog(Gtk.Dialog):
             cfg["auth"] = "password"
             cfg.pop("oauth_provider", None)
             self._test(cfg, pw, then=lambda: self._finish(cfg, pw))
+            return
+        if provider == "google" and self.use_goa and self.goa_found is not None:
+            return self._goa_connect(cfg, self.goa_found)
+        if provider == "google" and self.use_browser and not self.win.app.tokens.client("google")[0]:
+            self.say("First make the app's sign-in for Folio Post (the steps above), then add the file Google gives you.")
             return
         if self.use_goa:
             found = goa.find(self.email, provider)
