@@ -65,6 +65,9 @@ def system_prefers_dark():
         return True
     if env in ("light", "colorful", "white"):
         return False
+    gt = os.environ.get("GTK_THEME", "").lower()
+    if gt:
+        return "dark" in gt
     p = _portal_scheme()
     if p in (1, 2):
         return p == 1
