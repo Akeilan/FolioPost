@@ -31,3 +31,5 @@
 .folio-folderpane list { background: #ffffff; }
 .folio-note, .folio-note text { background-color: #fff7b3; color: #1a1a1a; padding: 8px; }
 .folio-table { border: 1px solid #999999; } .folio-cell { border-radius: 0; border-color: #999999; min-height: 22px; }
+.folio-messagebar { background: #fff4ce; padding: 4px 0; }
+.folio-messagebar label { color: #323130; }

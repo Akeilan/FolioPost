@@ -27,9 +27,15 @@ class World:
     def __init__(self):
         self.users = {}          # user -> (password, {cal id: Cal})
         self.log = []
+        self.proxies = {}
+        self.emails = {}
 
     def add_user(self, user, password, cals=("personal",), books=("contacts",)):
         self.users[user] = (password, {c: Cal(c.capitalize()) for c in cals})
+        self.proxies = getattr(self, "proxies", {})      # owner -> {user: "read" | "write"}
+        self.emails = getattr(self, "emails", {})        # e-mail address -> user
+        if "@" in user:
+            self.emails[user.lower()] = user
         self.books = getattr(self, "books", {})
         self.books[user] = {b: Cal(b.capitalize()) for b in books}
         return self.users[user][1]
@@ -103,8 +109,16 @@ class Handler(http.server.BaseHTTPRequestHandler):
         et, data = c.items[f]
         self.send(200, data, "text/calendar", {"ETag": et})
 
-    def item(self, user, p):
+    def allowed(self, user, owner, write=False):
+        m = self.server.world.proxies.get(owner, {}).get(user)
+        return m == "write" or (m == "read" and not write)
+
+    def item(self, user, p, write=False):
         cals = self.server.world.users[user][1]
+        if len(p) >= 2 and p[0] == "calendars" and p[1] != user and p[1] in self.server.world.users:
+            if not self.allowed(user, p[1], write):
+                return None, None
+            cals = self.server.world.users[p[1]][1]
         if len(p) >= 3 and p[0] == "calendars" and p[2] in cals:
             return cals[p[2]], (p[3] if len(p) > 3 else None)
         books = self.server.world.books.get(user, {})
@@ -125,9 +139,26 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self.send(207, self.ms([self.resp(self.path, "<d:current-user-principal><d:href>/principals/%s/</d:href>"
                                                                 "</d:current-user-principal>" % user)]))
         if p[0] == "principals":
-            return self.send(207, self.ms([self.resp(self.path, "<c:calendar-home-set><d:href>%s</d:href></c:calendar-home-set>"
+            w = self.server.world
+            who = p[1] if len(p) > 1 and p[1] in w.users else user
+            if len(p) > 2 and p[2].startswith("calendar-proxy-"):
+                mode = p[2].split("-")[-1]
+                members = [u for u, m in w.proxies.get(who, {}).items() if m == mode]
+                return self.send(207, self.ms([self.resp(self.path, "<d:group-member-set>%s</d:group-member-set>"
+                                                         % "".join("<d:href>/principals/%s/</d:href>" % u for u in members))]))
+            fors = {"read": [], "write": []}
+            for owner, granted in w.proxies.items():
+                if user in granted:
+                    fors[granted[user]].append(owner)
+            extra = ("<cs:calendar-proxy-read-for>%s</cs:calendar-proxy-read-for><cs:calendar-proxy-write-for>%s"
+                     "</cs:calendar-proxy-write-for>" % ("".join("<d:href>/principals/%s/</d:href>" % o for o in fors["read"]),
+                                                        "".join("<d:href>/principals/%s/</d:href>" % o for o in fors["write"]))
+                     if who == user else "")
+            return self.send(207, self.ms([self.resp(self.path, "<c:calendar-home-set><d:href>/calendars/%s/</d:href></c:calendar-home-set>"
                                                      "<card:addressbook-home-set xmlns:card=\"urn:ietf:params:xml:ns:carddav\">"
-                                                     "<d:href>/addressbooks/%s/</d:href></card:addressbook-home-set>" % (home, user))]))
+                                                     "<d:href>/addressbooks/%s/</d:href></card:addressbook-home-set>"
+                                                     "<c:schedule-outbox-URL><d:href>/outbox/%s/</d:href></c:schedule-outbox-URL>"
+                                                     "<d:displayname>%s</d:displayname>%s" % (who, who, who, who, extra))]))
         if p[0] == "addressbooks" and len(p) == 2:
             bh = "/addressbooks/%s/" % user
             out = [self.resp(bh, "<d:resourcetype><d:collection/></d:resourcetype>")]
@@ -138,6 +169,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
                                          "<cs:getctag>%d</cs:getctag>" % (esc(b.name), b.ctag)))
             return self.send(207, self.ms(out))
         if p[0] == "calendars" and len(p) == 2:
+            if p[1] != user:
+                if not self.allowed(user, p[1]):
+                    return self.send(403)
+                cals = self.server.world.users[p[1]][1]
+                home = "/calendars/%s/" % p[1]
             out = [self.resp(home, "<d:resourcetype><d:collection/></d:resourcetype>")]
             if depth != "0":
                 for cid, c in cals.items():
@@ -157,10 +193,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self.send(401)
         body = self.body()
         p = self.parts()
+        if "principal-property-search" in body:
+            m = re.search(r"<d:match>mailto:([^<]+)</d:match>", body)
+            u = getattr(self.server.world, "emails", {}).get(m.group(1).lower()) if m else None
+            return self.send(207, self.ms([self.resp("/principals/%s/" % u, "<d:displayname>%s</d:displayname>" % u)] if u else []))
         c, _f = self.item(user, p)
         if c is None:
             return self.send(404)
-        base = "/%s/%s/%s/" % (p[0], user, p[2])
+        base = "/%s/%s/%s/" % (p[0], p[1], p[2])
         tag = "c:calendar-data" if p[0] == "calendars" else "card:address-data"
         out = []
         if "multiget" in body:
@@ -175,12 +215,63 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 out.append(self.resp(base + urllib.parse.quote(f), "<d:getetag>%s</d:getetag>" % et))
         self.send(207, self.ms(out))
 
+    def do_POST(self):
+        """RFC 6638 free/busy: a VFREEBUSY request to the schedule outbox."""
+        user = self.auth()
+        if not user:
+            return self.send(401)
+        body = self.body()
+        p = self.parts()
+        if not p or p[0] != "outbox":
+            return self.send(404)
+        w = self.server.world
+        start = re.search(r"DTSTART:(\d{8}T\d{6}Z)", body).group(1)
+        end = re.search(r"DTEND:(\d{8}T\d{6}Z)", body).group(1)
+        out = []
+        for a in re.findall(r"ATTENDEE[^:]*:mailto:([^\r\n]+)", body):
+            u = w.emails.get(a.lower()) if hasattr(w, "emails") else None
+            if u is None:
+                out.append("<c:response><c:recipient><d:href>mailto:%s</d:href></c:recipient><c:request-status>3.7;Invalid "
+                           "calendar user</c:request-status></c:response>" % esc(a))
+                continue
+            busy = []
+            for c in w.users[u][1].values():
+                for _et, data in c.items.values():
+                    for ev in re.findall(r"BEGIN:VEVENT.*?END:VEVENT", data, re.S):
+                        s = re.search(r"DTSTART(?:;[^:]*)?:(\d{8}T\d{6}Z)", ev)
+                        e = re.search(r"DTEND(?:;[^:]*)?:(\d{8}T\d{6}Z)", ev)
+                        if s and e and s.group(1) < end and e.group(1) > start and "TRANSP:TRANSPARENT" not in ev:
+                            busy.append("%s/%s" % (s.group(1), e.group(1)))
+            fb = ("BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//test//EN\r\nMETHOD:REPLY\r\nBEGIN:VFREEBUSY\r\nDTSTART:%s\r\n"
+                  "DTEND:%s\r\n%sEND:VFREEBUSY\r\nEND:VCALENDAR\r\n" % (start, end, "".join("FREEBUSY;FBTYPE=BUSY:%s\r\n" % b for b in busy)))
+            out.append("<c:response><c:recipient><d:href>mailto:%s</d:href></c:recipient><c:request-status>2.0;Success"
+                       "</c:request-status><c:calendar-data>%s</c:calendar-data></c:response>" % (esc(a), esc(fb)))
+        self.send(200, '<?xml version="1.0"?><c:schedule-response xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav">%s'
+                  '</c:schedule-response>' % "".join(out))
+
+    def do_PROPPATCH(self):
+        user = self.auth()
+        if not user:
+            return self.send(401)
+        body = self.body()
+        p = self.parts()
+        if len(p) == 3 and p[0] == "principals" and p[1] == user and p[2].startswith("calendar-proxy-"):
+            mode = p[2].split("-")[-1]
+            w = self.server.world
+            g = w.proxies.setdefault(user, {})
+            for u in [u for u, m in g.items() if m == mode]:
+                del g[u]
+            for h in re.findall(r"<d:href>/principals/([^/<]+)/?</d:href>", body):
+                g[h] = mode
+            return self.send(207, self.ms([self.resp(self.path, "<d:group-member-set/>")]))
+        self.send(403)
+
     def do_PUT(self):
         user = self.auth()
         if not user:
             return self.send(401)
         data = self.body()
-        c, f = self.item(user, self.parts())
+        c, f = self.item(user, self.parts(), write=True)
         if c is None or not f:
             return self.send(404)
         if self.headers.get("If-None-Match") == "*" and f in c.items:
@@ -196,7 +287,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         user = self.auth()
         if not user:
             return self.send(401)
-        c, f = self.item(user, self.parts())
+        c, f = self.item(user, self.parts(), write=True)
         if c is None or f not in c.items:
             return self.send(404)
         im = self.headers.get("If-Match")

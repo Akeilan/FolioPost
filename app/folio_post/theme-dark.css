@@ -154,3 +154,5 @@ tooltip label { color: #f0f0f0; }
 .folio-backstage button:not(.suggested-action):not(.link):not(.folio-bs-navbtn), .folio-backstage button:not(.suggested-action):not(.link):not(.folio-bs-navbtn) label,
 .folio-bs-printbtn label, .folio-backstage checkbutton label, .folio-backstage radiobutton label { color: #f0f0f0; }
 .folio-backstage button:not(.suggested-action):not(.link):not(.flat):not(.folio-bs-navbtn) { background-color: #2b2b2b; background-image: none; }
+.folio-messagebar { background: #433519; }
+.folio-messagebar label { color: #f3f2f1; }

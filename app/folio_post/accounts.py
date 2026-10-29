@@ -4,6 +4,7 @@ import json
 import os
 import pwd
 import threading
+import urllib.parse
 
 from gi.repository import GLib, Gtk
 
@@ -71,6 +72,15 @@ def create_account(win, name, email, cfg, secret=None, oauth_tokens=None, kind="
     elif secret is not None:
         win.app.secrets.set(aid, secret)
     win.refresh_folders()
+    if kind == "ews":
+        # the Exchange account's Calendar, Contacts and Tasks, kept the same both ways
+        from . import ews
+        cals, books = ews.add_account_sources(store, None, store.account(aid))
+        if not store.get("tasks-account"):
+            store.put("tasks-account", aid)
+        for hook in ("_after_calendars", "_after_books"):
+            if hasattr(win, hook):
+                getattr(win, hook)()
     signed_in = oauth_tokens is not None or cfg.get("auth") == "goa"
     if signed_in and cfg.get("imap_host") == "imap.gmail.com" and not win.app.syncer.offline:
         # the same Google sign-in opens Google Calendar
@@ -116,6 +126,12 @@ class AccountDialog(Gtk.Dialog):
         self.page = None
         if account is None:
             self.page_email()
+        elif account["kind"] == "ews":
+            self.cfg = dict(account["config"])
+            self.email = account["email"]
+            self.display_name = account["name"]
+            self.kind = "ews"
+            self.page_exchange()
         else:
             self.cfg = dict(account["config"])
             self.kind = "manual"
@@ -174,8 +190,12 @@ class AccountDialog(Gtk.Dialog):
         self._title(APP_NAME, "Add your e-mail account.")
         self.name_entry = self._entry("Your name (shown to the people you write to)", real_name())
         self.email_entry = self._entry("E-mail address")
+        self.exchange_check = Gtk.CheckButton(label="Microsoft Exchange or Microsoft 365 (work or school account)")
+        self.box.pack_start(self.exchange_check, False, False, 4)
         self.manual_check = Gtk.CheckButton(label="Let me set up my account manually")
-        self.box.pack_start(self.manual_check, False, False, 4)
+        self.box.pack_start(self.manual_check, False, False, 0)
+        self.exchange_check.connect("toggled", lambda b: b.get_active() and self.manual_check.set_active(False))
+        self.manual_check.connect("toggled", lambda b: b.get_active() and self.exchange_check.set_active(False))
         self._status()
         self.ok.set_label("Connect")
         self.box.show_all()
@@ -308,7 +328,7 @@ class AccountDialog(Gtk.Dialog):
             return False
         threading.Thread(target=work, daemon=True).start()
 
-    def _browser_sign_in(self, cfg, provider):
+    def _browser_sign_in(self, cfg, provider, kind="imap"):
         cid, sec = self.win.app.tokens.client(provider)
         cfg["auth"] = "oauth"
         cfg["oauth_provider"] = provider
@@ -317,7 +337,7 @@ class AccountDialog(Gtk.Dialog):
         def work():
             try:
                 t = oauth.sign_in(cid, sec, login_hint=self.email, provider=provider)
-                err = self.win.app.syncer.test_account(cfg, None, t["access_token"])
+                err = self.win.app.syncer.test_account(cfg, None, t["access_token"], kind)
             except Exception as e:
                 t, err = None, "The sign-in didn't finish: %s" % e
             GLib.idle_add(done, t, err)
@@ -327,7 +347,105 @@ class AccountDialog(Gtk.Dialog):
             if err:
                 self.say("<span foreground='#c42b1c'>%s</span>" % GLib.markup_escape_text(err))
             else:
-                self._finish(cfg, tokens=t)
+                self._finish(cfg, tokens=t, kind=kind)
+            return False
+        threading.Thread(target=work, daemon=True).start()
+
+    # ------------------------------------------------------------ Exchange (M3-01)
+    def page_exchange(self):
+        self._clear()
+        self.page = "exchange"
+        c = self.cfg
+        self._title("Microsoft Exchange", self.email)
+        self._note("Mail, calendar, contacts and tasks, kept the same here and in Outlook.")
+        self.ex_ms = Gtk.RadioButton.new_with_label(None, "Sign in with Microsoft (Microsoft 365)")
+        self.ex_pw = Gtk.RadioButton.new_with_label_from_widget(self.ex_ms, "Sign in with a password (Exchange in your organisation)")
+        self.box.pack_start(self.ex_ms, False, False, 0)
+        self.box.pack_start(self.ex_pw, False, False, 0)
+        grid = Gtk.Grid(column_spacing=8, row_spacing=6)
+        self.ex = {}
+        rows = [("url", "Server address (EWS)", c.get("ews_url", "")), ("user", "User name", c.get("user", self.email)),
+                ("password", "Password", "")]
+        for r, (k, label, v) in enumerate(rows):
+            grid.attach(Gtk.Label(label=label, xalign=0), 0, r, 1, 1)
+            e = Gtk.Entry(text=v or "")
+            e.set_hexpand(True)
+            e.set_activates_default(True)
+            if k == "password":
+                e.set_visibility(False)
+                if self.account is not None:
+                    e.set_placeholder_text("(unchanged)")
+            if k == "url":
+                e.set_placeholder_text("Found by itself (Autodiscover); or https://mail.example.com/EWS/Exchange.asmx")
+            if k == "user":
+                e.set_placeholder_text("name@example.com or DOMAIN\\name")
+            grid.attach(e, 1, r, 1, 1)
+            self.ex[k] = e
+        auth = Gtk.ComboBoxText()
+        auth.append("ntlm", "Windows sign-in (NTLM)")
+        auth.append("basic", "Basic")
+        auth.set_active_id(c.get("ews_auth", "ntlm"))
+        grid.attach(Gtk.Label(label="Sign-in method", xalign=0), 0, 3, 1, 1)
+        grid.attach(auth, 1, 3, 1, 1)
+        self.ex["auth"] = auth
+        self.ex_grid = grid
+        self.box.pack_start(grid, False, False, 4)
+        self.ex_ms.connect("toggled", lambda *_: self._ex_sync())
+        (self.ex_pw if c.get("auth") == "password" or (self.account is not None and c.get("auth") != "oauth") else self.ex_ms).set_active(True)
+        self._status()
+        self.ok.set_label("Save" if self.account else "Connect")
+        self.box.show_all()
+        self._ex_sync()
+
+    def _ex_sync(self):
+        pw = self.ex_pw.get_active()
+        for k in ("user", "password", "auth"):
+            self.ex[k].set_sensitive(pw)
+
+    def next_exchange(self):
+        from . import ews
+        url = self.ex["url"].get_text().strip()
+        cfg = dict(self.cfg)
+        if self.ex_ms.get_active():
+            cfg.update({"ews_url": url or ews.OFFICE365, "user": self.email, "auth": "oauth", "oauth_provider": "microsoft"})
+            if not self.win.app.tokens.client("microsoft")[0]:
+                self.say("Microsoft sign-in needs an app registration (client ID) in File &gt; Options &gt; Accounts.")
+                return
+            return self._browser_sign_in(cfg, "microsoft", kind="ews")
+        user = self.ex["user"].get_text().strip() or self.email
+        pw = self.ex["password"].get_text()
+        if self.account is not None and not pw:
+            pw = self.win.app.secrets.get(self.account["id"])
+        cfg.update({"user": user, "auth": "password", "ews_auth": self.ex["auth"].get_active_id()})
+        cfg.pop("oauth_provider", None)
+
+        def go(found):
+            cfg["ews_url"] = found
+            self.ex["url"].set_text(found)
+            if self.account is not None:
+                def save():
+                    self.win.store.update_account(self.account["id"], config=cfg)
+                    if self.ex["password"].get_text():
+                        self.win.app.secrets.set(self.account["id"], pw)
+                    self.result = self.account["id"]
+                    self.destroy()
+                return self._test(cfg, pw, kind="ews", then=save)
+            self._test(cfg, pw, kind="ews", then=lambda: self._finish(cfg, pw, kind="ews"))
+        if url:
+            return go(url)
+        self.say("Looking for the Exchange server...", busy=True)
+
+        def work():
+            found = ews.autodiscover(self.email, pw, user)
+            GLib.idle_add(done, found)
+
+        def done(found):
+            self.say("")
+            if not found:
+                self.say("Folio Post couldn't find the Exchange server by itself. Type its address (ask whoever runs it, "
+                         "or look in Outlook's account settings).")
+            else:
+                go(found)
             return False
         threading.Thread(target=work, daemon=True).start()
 
@@ -462,6 +580,10 @@ class AccountDialog(Gtk.Dialog):
         self.cfg = cfg
         if self.manual_check.get_active():
             return self.page_manual()
+        if self.exchange_check.get_active():
+            self.kind = "ews"
+            self.cfg = {}
+            return self.page_exchange()
         if kind == "gmail":
             return self.page_gmail()
         if kind == "proton":
@@ -474,7 +596,8 @@ class AccountDialog(Gtk.Dialog):
         return self.page_password()
 
     def _test(self, cfg, password=None, token=None, kind="imap", then=None):
-        self.say("Connecting to %s..." % GLib.markup_escape_text(cfg.get("imap_host", "")), busy=True)
+        self.say("Connecting to %s..." % GLib.markup_escape_text(cfg.get("imap_host", "") or
+                                                                urllib.parse.urlparse(cfg.get("ews_url", "")).hostname or ""), busy=True)
         syncer = self.win.app.syncer
 
         def work():
