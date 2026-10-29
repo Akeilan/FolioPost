@@ -156,6 +156,18 @@ class ReadingPane(Gtk.Box):
             self.invite_buttons[key] = b
         self.invite.set_no_show_all(True)
         self.content.pack_start(self.invite, False, False, 2)
+        # voting buttons (M3-05): the choices to answer with, or the tally on the sender's copy
+        self.vote = Gtk.Box(spacing=6)
+        self.vote.get_style_context().add_class("folio-invitebar")
+        self.vote.set_margin_start(16)
+        self.vote.set_margin_end(16)
+        self.vote_label = Gtk.Label(xalign=0)
+        self.vote_label.set_line_wrap(True)
+        self.vote.pack_start(self.vote_label, True, True, 0)
+        self.vote_buttons = Gtk.Box(spacing=6)
+        self.vote.pack_end(self.vote_buttons, False, False, 0)
+        self.vote.set_no_show_all(True)
+        self.content.pack_start(self.vote, False, False, 2)
         self.invite_ics = None
         # remote pictures
         self.bar = Gtk.EventBox()
@@ -291,9 +303,80 @@ class ReadingPane(Gtk.Box):
         self.att_box.set_visible(bool(shown))
         self.att_box.show_all()
         self.show_invite(msg)
+        self.show_voting(msg)
         self.render()
         self.stack.set_visible_child_name("message")
         self.scroller.get_vadjustment().set_value(0)
+
+    def show_voting(self, msg):
+        from . import voting
+        self.vote.hide()
+        self.vote_choices = choices = voting.choices_of(msg)
+        self.vote_msg, self.vote_row = msg, self.row
+        for c in self.vote_buttons.get_children():
+            self.vote_buttons.remove(c)
+        if not choices:
+            return
+        store = self.win.store
+        row = self.row
+        mine = False
+        if row is not None:
+            f = store.folder(row["folder"])
+            acc = store.account(f["account"]) if f else None
+            mine = (f and f["role"] in ("sent", "outbox")) or (acc and row["from_addr"].lower() == acc["email"].lower())
+        if mine:
+            counts, rows = voting.tally(store, row, choices)
+            parts = ["%s: %d" % (c, len(counts[c])) for c in choices]
+            self.vote_label.set_markup("<b>Voting responses</b>  %s" % GLib.markup_escape_text(",  ".join(parts)))
+            b = Gtk.Button(label="View Tracking")
+            b.connect("clicked", lambda *_: self.show_tracking())
+            self.vote_buttons.pack_start(b, False, False, 0)
+        else:
+            done = store.get("voted:%s" % ((row["msgid"] if row else "") or (row["id"] if row else "")))
+            self.vote_label.set_markup(("<b>You voted %s.</b> You can change your vote." % GLib.markup_escape_text(done)) if done
+                                       else "<b>Vote:</b> click a button to send your answer.")
+            for c in choices:
+                b = Gtk.Button(label=c)
+                b.connect("clicked", lambda _b, ch=c: self.vote_for(ch))
+                self.vote_buttons.pack_start(b, False, False, 0)
+        self.vote.set_no_show_all(False)
+        self.vote.show_all()
+
+    def vote_for(self, choice):
+        from . import voting
+        main = getattr(self.win, "main", self.win)
+        m = voting.send_vote(main, self.vote_row, self.vote_msg, choice)
+        if m is not None and self.msg is self.vote_msg:
+            self.show_voting(self.msg)
+        return m
+
+    def show_tracking(self):
+        from . import voting
+        counts, rows = voting.tally(self.win.store, self.vote_row, self.vote_choices)
+        d = Gtk.Dialog(title="Tracking", transient_for=self.win.get_toplevel(), modal=True)
+        d.get_style_context().add_class("folio-dialog")
+        d.add_button("Close", Gtk.ResponseType.CLOSE)
+        d.set_default_size(420, 300)
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6, margin=10)
+        d.get_content_area().pack_start(box, True, True, 0)
+        box.pack_start(Gtk.Label(label="Reply tally: " + ",  ".join("%s %d" % (c, len(counts[c])) for c in self.vote_choices),
+                                 xalign=0), False, False, 0)
+        ls = Gtk.ListStore(str, str, str)
+        for who, c, when in rows:
+            ls.append([who, c, time.strftime("%d/%m/%Y %H:%M", time.localtime(when)) if when else ""])
+        tv = Gtk.TreeView(model=ls)
+        for k, title in enumerate(("Recipient", "Response", "Time")):
+            tv.append_column(Gtk.TreeViewColumn(title, Gtk.CellRendererText(), text=k))
+        sw = Gtk.ScrolledWindow()
+        sw.set_vexpand(True)
+        sw.add(tv)
+        box.pack_start(sw, True, True, 0)
+        d.show_all()
+        self.tracking_dialog = d
+        d.run()
+        d.destroy()
+        self.tracking_dialog = None
+        return counts
 
     def calendar_part(self, msg):
         for p in msg.walk():

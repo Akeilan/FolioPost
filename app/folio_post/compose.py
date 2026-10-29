@@ -101,6 +101,9 @@ def color_menu(win, cmd, colors, none_label):
     return make
 
 
+from .voting import PRESETS as VOTING_PRESETS  # noqa: E402
+
+
 class ComposeWindow(Gtk.Window):
     def __init__(self, app, account=None, to="", cc="", bcc="", subject="", body_text="", reply_to=None, mode=None,
                  draft=None, attach=(), attach_data=()):
@@ -116,6 +119,7 @@ class ComposeWindow(Gtk.Window):
         self.plain = False
         self.importance = 1
         self.read_receipt = False
+        self.voting = []
         self.delivery_receipt = False
         self.send_at = 0
         self.reply_to_addr = ""
@@ -170,7 +174,7 @@ class ComposeWindow(Gtk.Window):
         grid = Gtk.Grid(column_spacing=6, row_spacing=4)
         self.fields = {}
         self.from_combo = Gtk.ComboBoxText()
-        self.accounts = [a for a in self.store.accounts()]
+        self.accounts = [a for a in self.store.accounts() if a["kind"] != "rss"]
         for a in self.accounts:
             self.from_combo.append(str(a["id"]), "%s <%s>" % (a["name"] or a["email"], a["email"]) if a["name"] else a["email"])
         row = 0
@@ -359,7 +363,11 @@ class ComposeWindow(Gtk.Window):
         self.receipt_check = CheckControl(r, "Request a Read Receipt", "toggle-read-receipt", state="read-receipt", keytip="Q")
         self.delivery_check = CheckControl(r, "Request a Delivery Receipt", "toggle-delivery-receipt",
                                            state="delivery-receipt", keytip="R")
-        B.group(t, "Tracking", [[self.delivery_check, self.receipt_check]])
+        B.group(t, "Tracking", [B.big("Use Voting Buttons", "p-flag", None, "V",
+                                      menu=[(label, "voting:" + v) for label, v in VOTING_PRESETS] +
+                                      [("Custom...", "voting:custom"), None, ("No Voting Buttons", "voting:clear")],
+                                      tip="Use Voting Buttons: the people you send this to answer with one click"),
+                                [self.delivery_check, self.receipt_check]])
         B.group(t, "More Options", [
             B.big("Delay Delivery", "p-delay", "delay-delivery", "DD"),
             B.big("Direct Replies To", "p-reply", "direct-replies", "DR"),
@@ -664,6 +672,8 @@ class ComposeWindow(Gtk.Window):
                 self.attachments.append((a["name"], a["type"], a["data"]))
         imp = mime.header(msg, "Importance").lower()
         self.importance = 2 if imp == "high" else 0 if imp == "low" else 1
+        from .voting import parse_choices
+        self.voting = parse_choices(mime.header(msg, "X-Folio-Voting"))
         self.refresh_attachments()
         self.sync_tags()
 
@@ -738,11 +748,20 @@ class ComposeWindow(Gtk.Window):
             _mid, om = self.original
             in_reply_to = mime.header(om, "Message-ID").strip() or None
             refs = (mime.header(om, "References").strip() + " " + (in_reply_to or "")).strip() or None
+        vote_text = vote_html = ""
+        if self.voting and not for_draft:
+            from . import voting
+            extra[voting.HEADER] = ";".join(self.voting)
+            vote_text, vote_html = voting.footer(self.voting, sender[1], subject)
+        elif self.voting:
+            extra["X-Folio-Voting"] = ";".join(self.voting)
         if self.plain:
             html_body = None
             inline = ()
-            text = text + qtext
+            text = text + vote_text + qtext
         else:
+            text = text + vote_text
+            body_html = body_html + vote_html
             full = body_html + (("<br>" + quoted) if quoted else "")
             html_body = ("<html><head><meta charset='utf-8'></head><body>%s</body></html>" % full)
             inline = list(pics) + list(qpics)
@@ -920,11 +939,36 @@ class ComposeWindow(Gtk.Window):
         dlg.add_buttons("Cancel", Gtk.ResponseType.CANCEL, "Save", Gtk.ResponseType.OK)
         dlg.set_do_overwrite_confirmation(True)
         dlg.set_current_name((re.sub(r"[^\w .,-]+", "", self.subject.get_text())[:80] or "Untitled") + ".eml")
+        for name, pat in (("Message (*.eml)", "*.eml"), ("Outlook Template (*.oft)", "*.oft"), ("Outlook Message (*.msg)", "*.msg")):
+            f = Gtk.FileFilter()
+            f.set_name(name)
+            f.add_pattern(pat)
+            dlg.add_filter(f)
+        dlg.connect("notify::filter", lambda d, _p: self._save_as_ext(d))
         path = dlg.get_filename() if dlg.run() == Gtk.ResponseType.OK else None
         dlg.destroy()
         if path:
-            from .window import save_message
-            save_message(mime.to_bytes(self.build(for_draft=True)), path)
+            self.save_to(path)
+        return path
+
+    def _save_as_ext(self, dlg):
+        f = dlg.get_filter()
+        name = dlg.get_current_name() or ""
+        ext = {"Outlook Template (*.oft)": ".oft", "Outlook Message (*.msg)": ".msg"}.get(f.get_name() if f else "", ".eml")
+        dlg.set_current_name(re.sub(r"\.(eml|oft|msg)$", "", name, flags=re.I) + ext)
+
+    def save_to(self, path):
+        """Save As: .eml, an Outlook template (.oft) or an Outlook message (.msg)."""
+        low = path.lower()
+        if low.endswith((".oft", ".msg")):
+            from . import msgfile
+            data = msgfile.write(msgfile.fields_of_message(self.build(for_draft=True)), template=low.endswith(".oft"))
+            with open(path, "wb") as fh:
+                fh.write(data)
+            return path
+        from .window import save_message
+        save_message(mime.to_bytes(self.build(for_draft=True)), path)
+        return path
 
     def act_print(self):
         from .printing import print_message
@@ -1210,6 +1254,24 @@ class ComposeWindow(Gtk.Window):
         for w in self.from_row:
             w.set_visible(on)
         self.app.set_setting("show_from", on)
+
+    def act_voting(self, how="custom"):
+        """Options > Use Voting Buttons."""
+        from . import voting
+        if how == "clear":
+            self.voting = []
+        elif how == "custom":
+            text = self.dialogs.ask_text("Use Voting Buttons", "Choices, separated by semicolons:",
+                                         ";".join(self.voting) or "Approve;Reject")
+            if text is None:
+                return self.voting
+            self.voting = voting.parse_choices(text)
+        else:
+            self.voting = voting.parse_choices(how)
+        self.modified = True
+        if hasattr(self, "set_infobar_text"):
+            self.set_infobar_text()
+        return self.voting
 
     def act_toggle_read_receipt(self):
         self.read_receipt = self.receipt_check.get_active()

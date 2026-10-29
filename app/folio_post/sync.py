@@ -101,6 +101,13 @@ class Syncer:
         acc = self.store.account(aid)
         if acc is None or acc["kind"] == "local":
             return False
+        if acc["kind"] == "rss":
+            from . import rss
+            self.say(aid, "Updating RSS Feeds...")
+            n = rss.Feeds(self.store).refresh()
+            self.say(aid, "Updated %s (%d new)" % (time.strftime("%H:%M"), n))
+            self.store.changed("messages")
+            return True
         with self.lock:
             try:
                 self.say(aid, "Sending...")

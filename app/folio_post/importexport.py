@@ -188,7 +188,13 @@ def import_pst(win, path):
 
 
 def msg_to_eml(path):
-    """An Outlook .msg as an RFC 822 message, through msgconvert (libemail-outlook-message-perl)."""
+    """An Outlook .msg as an RFC 822 message (read here; msgconvert for what this doesn't read)."""
+    from . import msgfile
+    try:
+        with open(path, "rb") as fh:
+            return msgfile.to_eml(fh.read())
+    except Exception:
+        pass
     conv = shutil.which("msgconvert")
     if conv is None:
         raise RuntimeError("opening .msg files needs msgconvert. Install it with:  sudo apt install libemail-outlook-message-perl")
