@@ -319,6 +319,13 @@ class CalendarSync:
             try:
                 if cal["kind"] == "ics":
                     self._replace_ics(cid, fetch_ics(cal["url"]))
+                elif cal["kind"] == "ews":
+                    from . import ews
+                    c = ews.client_for(self.store.account(cal["account"]), self.secrets, self.tokens)
+                    try:
+                        ews.sync_calendar(self.store, c, cal)
+                    finally:
+                        c.close()
                 else:
                     self._sync_dav(cal)
                 self.errors.pop(cid, None)

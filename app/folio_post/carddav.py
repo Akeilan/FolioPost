@@ -154,6 +154,15 @@ class ContactSync:
             return True
         with self.lock:
             try:
+                if book["kind"] == "ews":
+                    from . import ews
+                    c = ews.client_for(self.store.account(book["account"]), self.secrets, self.tokens)
+                    try:
+                        ews.sync_book(self.store, c, book)
+                    finally:
+                        c.close()
+                    self.errors.pop(bid, None)
+                    return True
                 self._sync(book)
                 self.errors.pop(bid, None)
                 return True

@@ -108,6 +108,8 @@ class Syncer:
                 if acc["kind"] == "pop3":
                     self.say(aid, "Receiving...")
                     self.pop_sync(acc)
+                elif acc["kind"] == "ews":
+                    self.ews_sync(acc, folders)
                 else:
                     self.say(aid, "Connecting...")
                     pw, tok = self.credentials(acc)
@@ -134,6 +136,42 @@ class Syncer:
             finally:
                 self.store.changed("messages")
         return False
+
+    def ews_client(self, acc):
+        from . import ews
+        return ews.client_for(acc, self.secrets, self.oauth)
+
+    def ews_sync(self, acc, folders=None):
+        """Exchange: mail through the same steps as IMAP, then the calendars, contacts and tasks."""
+        from . import ews
+        self.say(acc["id"], "Connecting...")
+        cl = self.ews_client(acc)
+        c = ews.Mail(cl, self.store, acc["id"])
+        try:
+            self.sync_folders(acc, c)
+            for f in self.store.folders(acc["id"]):
+                if f["role"] == "outbox" or (folders and f["id"] not in folders):
+                    continue
+                self.say(acc["id"], "Updating %s..." % f["name"])
+                self.sync_folder(acc, c, f)
+            if folders:
+                return
+            self.say(acc["id"], "Updating the calendar...")
+            for cal in self.store.calendars():
+                if cal["account"] == acc["id"] and cal["kind"] == "ews":
+                    ews.sync_calendar(self.store, cl, cal)
+                    self.store.changed("events")
+            for book in self.store.books():
+                if book["account"] == acc["id"] and book["kind"] == "ews":
+                    ews.sync_book(self.store, cl, book)
+                    self.store.changed("contacts")
+            if self.store.get("tasks-account") == acc["id"]:
+                self.say(acc["id"], "Updating tasks...")
+                ews.sync_tasks(self.store, cl, acc["id"])
+        except ews.AuthError as e:
+            raise net.AuthError(str(e))
+        finally:
+            c.close()
 
     def sync_folders(self, acc, c):
         have = {f["path"]: f for f in self.store.folders(acc["id"])}
@@ -236,9 +274,16 @@ class Syncer:
             raw = o["raw"]
             rcpts = json.loads(o["rcpts"])
             try:
-                pw, tok = self.credentials(acc)
-                sender = acc["email"]
-                net.send(acc["config"], mime.without_bcc(raw), sender, rcpts, pw, tok)
+                if acc["kind"] == "ews":
+                    cl = self.ews_client(acc)
+                    try:
+                        cl.send_mime(raw, save=True)
+                    finally:
+                        cl.close()
+                else:
+                    pw, tok = self.credentials(acc)
+                    sender = acc["email"]
+                    net.send(acc["config"], mime.without_bcc(raw), sender, rcpts, pw, tok)
             except Exception as e:
                 self.store.send_failed(o["id"], e)
                 raise
@@ -250,7 +295,7 @@ class Syncer:
         sent = self.store.folder_by_role(acc["id"], "sent")
         if sent is None:
             return
-        if acc["config"].get("server_saves_sent"):
+        if acc["config"].get("server_saves_sent") or acc["kind"] == "ews":
             return
         mid = self.store.add_message(sent["id"], raw, 0, ["seen"])
         self.store.set_fields(mid, pending="new")
@@ -282,8 +327,16 @@ class Syncer:
     # ------------------------------------------------------------ folders on the server
     def server_op(self, aid, fn):
         acc = self.store.account(aid)
-        if acc is None or acc["kind"] != "imap" or self.offline:
+        if acc is None or acc["kind"] not in ("imap", "ews") or self.offline:
             return None
+        if acc["kind"] == "ews":
+            from . import ews
+            with self.lock:
+                c = ews.Mail(self.ews_client(acc), self.store, aid)
+                try:
+                    return fn(c)
+                finally:
+                    c.close()
         pw, tok = self.credentials(acc)
         with self.lock:
             c = net.Imap(acc["config"]).connect(pw, tok)
@@ -297,6 +350,16 @@ class Syncer:
         try:
             if kind == "pop3":
                 net.Pop(cfg).connect(password).close()
+            elif kind == "ews":
+                from . import ews
+                cl = ews.Client(cfg.get("ews_url") or ews.OFFICE365, cfg.get("user", ""), password, token,
+                                "bearer" if token else cfg.get("ews_auth", "basic"), cfg.get("insecure", False))
+                try:
+                    cl.get_folders(["inbox"])
+                except ews.AuthError as e:
+                    raise net.AuthError(str(e))
+                finally:
+                    cl.close()
             else:
                 c = net.Imap(cfg).connect(password, token)
                 c.folders()
