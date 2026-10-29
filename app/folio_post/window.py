@@ -14,6 +14,7 @@ from .ribbon_post import CATEGORIES, build_ribbon, move_menu
 from .calcmds import CalendarCommands
 from .peoplecmds import PeopleCommands
 from .taskcmds import TaskCommands
+from .post_b3 import Backlog3Commands
 from .store import ROLE_NAMES
 
 DND_TARGET = "folio-post/messages"
@@ -76,7 +77,7 @@ class StatusBar(Gtk.Box):
         self.pack_end(self.right, True, True, 8)
 
 
-class PostWindow(TaskCommands, PeopleCommands, CalendarCommands, Gtk.ApplicationWindow):
+class PostWindow(Backlog3Commands, TaskCommands, PeopleCommands, CalendarCommands, Gtk.ApplicationWindow):
     def __init__(self, app):
         Gtk.ApplicationWindow.__init__(self, application=app)
         self.app = app
@@ -131,6 +132,17 @@ class PostWindow(TaskCommands, PeopleCommands, CalendarCommands, Gtk.Application
         self.ribbon = Ribbon(self.run, self.focus_document)
         self.ribbon.connect("file-clicked", lambda *_: self.show_backstage())
         self.outer.pack_start(self.ribbon, False, False, 0)
+        # Automatic Replies are on: said under the ribbon, as Outlook does
+        self.autoreply_bar = Gtk.Box(spacing=8)
+        self.autoreply_bar.get_style_context().add_class("folio-messagebar")
+        ab_lab = Gtk.Label(xalign=0)
+        ab_lab.set_markup("<b>AUTOMATIC REPLIES</b>   Automatic replies are being sent for this account.")
+        self.autoreply_bar.pack_start(ab_lab, False, False, 10)
+        ab_off = Gtk.Button(label="Turn off")
+        ab_off.connect("clicked", lambda *_: self.run("automatic-replies"))
+        self.autoreply_bar.pack_start(ab_off, False, False, 0)
+        self.autoreply_bar.set_no_show_all(True)
+        self.outer.pack_start(self.autoreply_bar, False, False, 2)
         self.body = Gtk.Paned()
         self.modules = Gtk.Stack()
         self.modules.set_transition_type(Gtk.StackTransitionType.NONE)
@@ -319,6 +331,7 @@ class PostWindow(TaskCommands, PeopleCommands, CalendarCommands, Gtk.Application
                 self.search_text = ""
             self.refresh_list()
             self.update_title()
+            self.show_autoreply_bar()
 
     def _folder_button(self, tv, ev):
         if ev.button != 3:

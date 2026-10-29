@@ -32,10 +32,12 @@ def build_cal_ribbon(win, r):
         B.big("Open Calendar", "p-open-file", None, "OC", menu=[
             ("From Internet...", "open-calendar-internet"), ("From a Calendar Server (CalDAV)...", "open-calendar-server"),
             ("Google Calendar of an Account", "add-google-calendar"), ("From File...", "open-calendar-file"), None,
+            ("Open Shared Calendar...", "open-shared-calendar"), ("Calendars Shared With Me", "open-delegated-calendars"), None,
             ("Create New Blank Calendar...", "new-calendar")]),
         [B.small("Calendar Groups", "p-folder", None, "G", menu=lambda: win.calendar_groups_menu())],
     ])
     B.group(t, "Share", [[B.small("E-mail Calendar", "p-new-email", "email-calendar", "E"),
+                          B.small("Calendar Permissions", "p-account", "calendar-permissions", "CP"),
                           B.small("Publish Online", "p-send-all", "out-of-scope:Publish Online", "PO")]])
     B.group(t, "Find", [[B.small("Search People", "p-search-people", "search-people", "FP"),
                          B.small("Address Book", "p-address-book", "address-book", "AB")]])
@@ -436,7 +438,7 @@ class CalendarCommands:
         c = self._cal_target()
         if c:
             n = len(self.store.events(c["id"]))
-            kind = {"local": "On this computer", "caldav": "Calendar server (CalDAV)", "google": "Google Calendar",
+            kind = {"local": "On this computer", "caldav": "Calendar server (CalDAV)", "google": "Google Calendar", "ews": "Microsoft Exchange",
                     "ics": "Internet calendar (read-only)"}.get(c["kind"], c["kind"])
             self.dialogs.info("%s\n\nType: %s\nAddress: %s\nItems: %d" % (c["name"], kind, c["url"] or "-", n), "Calendar Properties")
 

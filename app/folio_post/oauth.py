@@ -15,11 +15,13 @@ import urllib.request
 
 MS_AUTH = "https://login.microsoftonline.com/common/oauth2/v2.0/authorize"
 MS_TOKEN = "https://login.microsoftonline.com/common/oauth2/v2.0/token"
-MS_SCOPES = ["https://outlook.office.com/IMAP.AccessAsUser.All", "https://outlook.office.com/SMTP.Send", "offline_access",
+MS_SCOPES = ["https://outlook.office.com/IMAP.AccessAsUser.All", "https://outlook.office.com/SMTP.Send",
+             "https://outlook.office.com/EWS.AccessAsUser.All", "offline_access",
              "openid", "email"]
 GOOGLE_AUTH = "https://accounts.google.com/o/oauth2/v2/auth"
 GOOGLE_TOKEN = "https://oauth2.googleapis.com/token"
 GOOGLE_SCOPES = ["https://mail.google.com/", "https://www.googleapis.com/auth/calendar",
+                 "https://www.googleapis.com/auth/gmail.settings.basic",
                  "https://www.googleapis.com/auth/carddav", "openid", "email"]
 
 

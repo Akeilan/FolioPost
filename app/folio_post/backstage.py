@@ -120,7 +120,7 @@ class Backstage(Gtk.Box):
         acc = self.win.current_account()
         if acc:
             lab = Gtk.Label(xalign=0)
-            kind = {"imap": "IMAP/SMTP", "pop3": "POP/SMTP", "local": "On this computer"}.get(acc["kind"], acc["kind"])
+            kind = {"imap": "IMAP/SMTP", "pop3": "POP/SMTP", "local": "On this computer", "ews": "Microsoft Exchange"}.get(acc["kind"], acc["kind"])
             lab.set_markup("<big><b>%s</b></big>\n%s" % (GLib.markup_escape_text(acc["email"] or acc["name"]), kind))
             box.pack_start(lab, False, False, 4)
         elif not accs:
@@ -131,6 +131,8 @@ class Backstage(Gtk.Box):
         box.pack_start(add, False, False, 4)
         box.pack_start(self._action("p-account", "Account Settings", "Change settings for this account or set up more "
                                     "connections.", "account-settings"), False, False, 6)
+        box.pack_start(self._action("p-delay", "Automatic Replies", "Let people know you're away, on vacation, or not "
+                                    "available to answer e-mail.", "automatic-replies"), False, False, 6)
         box.pack_start(self._action("p-clean-up", "Mailbox Settings", "Empty Deleted Items and clean up the mailbox.",
                                     "empty-trash"), False, False, 6)
         box.pack_start(self._action("p-rules", "Rules and Alerts", "Organize incoming mail and get told when it "

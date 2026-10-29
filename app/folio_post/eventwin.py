@@ -281,6 +281,8 @@ class EventWindow(Gtk.Window):
             B.big("Delete", "p-delete", "delete", "D"),
             [B.small("Forward", "p-forward", "forward", "FW"), B.small("Copy to My Calendar", "p-nav-calendar", "copy-to-calendar", "C")],
         ])
+        B.group(t, "Show", [B.big("Scheduling Assistant", "p-change-view", "scheduling-assistant", "SA",
+                                  tip="Scheduling Assistant: everyone's free/busy")])
         B.group(t, "Attendees", [B.big("Invite Attendees", "p-nav-people", "invite", "I"),
                                  [B.small("Cancel Invitation", "p-cancel-all", "cancel-invitation", "CI")]])
         B.group(t, "Options", [
@@ -486,6 +488,12 @@ class EventWindow(Gtk.Window):
         org = (self.editing or self.master).organizer
         me = {a["email"].lower() for a in self.store.accounts()}
         return org is None or org[1].lower() in me
+
+    def act_scheduling_assistant(self):
+        from .post_b3 import scheduling_assistant
+        if not self.is_meeting:
+            self.act_invite()
+        return scheduling_assistant(self)
 
     def act_invite(self):
         self.is_meeting = True
