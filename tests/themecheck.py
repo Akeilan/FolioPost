@@ -161,9 +161,26 @@ def _walk(w, out):
             _walk(c, out)
 
 
-def _covered(w, win, cx, cy):
-    """True when an overlay child is drawn over the point (cx, cy) of `w` (window coordinates)."""
+def _scrolled_out(w, win, cx, cy):
+    """True when (cx, cy) lies outside a scrolled view `w` sits in (scrolled out of sight)."""
     from gi.repository import Gtk
+    p = w.get_parent()
+    while p is not None and p is not win:
+        if isinstance(p, (Gtk.Viewport, Gtk.ScrolledWindow)):
+            a = p.get_allocation()
+            xy = p.translate_coordinates(win, 0, 0)
+            if xy and not (xy[0] <= cx < xy[0] + a.width and xy[1] <= cy < xy[1] + a.height):
+                return True
+        p = p.get_parent()
+    return False
+
+
+def _covered(w, win, cx, cy):
+    """True when an overlay child is drawn over the point (cx, cy) of `w` (window coordinates),
+    or the point is scrolled out of sight."""
+    from gi.repository import Gtk
+    if _scrolled_out(w, win, cx, cy):
+        return True
     child, p = w, w.get_parent()
     while p is not None:
         if isinstance(p, Gtk.Overlay) and child is p.get_child():
