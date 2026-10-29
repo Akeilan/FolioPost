@@ -2,6 +2,7 @@ main	new-email	OK
 main	new-meeting	OK
 main	new-contact	OK
 main	new-task	OK
+main	choose-form	OK
 main	new-folder	OK
 main	ignore	OK
 main	clean-up:conversation	OK
@@ -46,6 +47,8 @@ main	show-progress	OK
 main	cancel-all	OK
 main	work-offline	OK
 main	new-search-folder	OK
+main	add-rss-feed	OK
+main	remove-rss-feed	OK
 main	rename-folder	OK
 main	copy-folder	OK
 main	move-folder	OK
@@ -178,6 +181,11 @@ compose	toggle-encrypt	OK
 compose	toggle-sign	OK
 compose	toggle-read-receipt	OK
 compose	toggle-delivery-receipt	OK
+compose	voting:Approve;Reject	OK
+compose	voting:Yes;No	OK
+compose	voting:Yes;No;Maybe	OK
+compose	voting:custom	OK
+compose	voting:clear	OK
 compose	delay-delivery	OK
 compose	direct-replies	OK
 compose	format:html	OK
@@ -211,8 +219,11 @@ calendar	open-calendar-internet	OK
 calendar	open-calendar-server	OK
 calendar	add-google-calendar	OK
 calendar	open-calendar-file	OK
+calendar	open-shared-calendar	OK
+calendar	open-delegated-calendars	OK
 calendar	new-calendar	OK
 calendar	email-calendar	OK
+calendar	calendar-permissions	OK
 calendar	out-of-scope:Publish Online	OK
 calendar	search-people	OK
 calendar	address-book	OK
@@ -252,6 +263,7 @@ calendar	delete-event	OK
 calendar	delete-calendar	OK
 appointment	forward	OK
 appointment	copy-to-calendar	OK
+appointment	scheduling-assistant	OK
 appointment	invite	OK
 appointment	cancel-invitation	OK
 appointment	show-as:free	OK
