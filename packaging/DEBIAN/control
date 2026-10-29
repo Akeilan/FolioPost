@@ -1,5 +1,5 @@
 Package: folio-post
-Version: 0.6.1
+Version: 0.6.2
 Section: mail
 Priority: optional
 Architecture: amd64

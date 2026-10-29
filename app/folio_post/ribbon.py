@@ -1,6 +1,6 @@
 """The ribbon: tabs of captioned groups of buttons, all owned by the app.
 
-One module for Folio Writer, Sheets, Deliver and Post (X2-02). The copy in folio-suite/shared
+One module for Folio Page, Sheet, Show and Post, and the ribbon under Draw (X2-02, X3-04). The copy in folio-suite/shared
 is the one to change; folio-suite/tools/sync_shared.sh copies it into each app, and
 sync_shared.sh --check fails when an app's copy differs.
 
@@ -519,6 +519,11 @@ class Group(Gtk.Box):
                 return
             if isinstance(w, Gtk.Image) and w.get_pixbuf() is not None:
                 found.append(w.get_pixbuf())
+            elif hasattr(w, "snapshot_pixbuf"):
+                # an icon drawn by the app itself (Folio Draw)
+                pb = w.snapshot_pixbuf()
+                if pb is not None:
+                    found.append(pb)
             elif isinstance(w, Gtk.Container):
                 for ch in w.get_children():
                     walk(ch)
@@ -669,7 +674,7 @@ class Ribbon(Gtk.Box):
     # -- building
     def add_tab(self, tab):
         self.tabs.append(tab)
-        b = Gtk.Button(label=getattr(tab, "label", tab.name))
+        b = self.make_tab_button(tab)
         b.set_relief(Gtk.ReliefStyle.NONE)
         b.set_focus_on_click(False)
         b.get_style_context().add_class("folio-tab")
@@ -686,6 +691,10 @@ class Ribbon(Gtk.Box):
         self.stack.add_named(scroller, tab.name)
         if self.current is None:
             self.select(tab)
+
+    def make_tab_button(self, tab):
+        """The button for a tab (an app may want a different kind, e.g. Folio Draw's toggles)."""
+        return Gtk.Button(label=getattr(tab, "label", tab.name))
 
     def building(self, tab):
         self._building = tab
