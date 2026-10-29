@@ -147,7 +147,12 @@ class PostWindow(Backlog3Commands, TaskCommands, PeopleCommands, CalendarCommand
         self.modules = Gtk.Stack()
         self.modules.set_transition_type(Gtk.StackTransitionType.NONE)
         self.modules.add_named(self.body, "mail")
-        self.outer.pack_start(self.modules, True, True, 0)
+        # the navigation bar: down the left edge, the same in Mail, Calendar, People and Tasks
+        # (as Outlook's), so every view has its way back to the others
+        middle = Gtk.Box(spacing=0)
+        middle.pack_start(self.build_nav_bar(), False, False, 0)
+        middle.pack_start(self.modules, True, True, 0)
+        self.outer.pack_start(middle, True, True, 0)
         self.build_folder_pane()
         self.build_list()
         self.reading = ReadingPane(self)
@@ -212,22 +217,43 @@ class PostWindow(Backlog3Commands, TaskCommands, PeopleCommands, CalendarCommand
         sw.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
         sw.add(tv)
         box.pack_start(sw, True, True, 0)
-        # Navigation bar
-        nav = Gtk.Box(spacing=0)
+        self.folder_box = box
+
+    def build_nav_bar(self):
+        nav = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
         nav.get_style_context().add_class("folio-navbar")
+        nav.get_style_context().add_class("folio-navrail")
         self.nav_buttons = {}
-        for key, icon, tip in (("mail", "p-nav-mail", "Mail (Ctrl+1)"), ("calendar", "p-nav-calendar", "Calendar (Ctrl+2)"),
-                               ("people", "p-nav-people", "People (Ctrl+3)"), ("tasks", "p-nav-tasks", "Tasks (Ctrl+4)")):
+        for key, icon, label, tip in (("mail", "p-nav-mail", "Mail", "Mail (Ctrl+1)"),
+                                      ("calendar", "p-nav-calendar", "Calendar", "Calendar (Ctrl+2)"),
+                                      ("people", "p-nav-people", "People", "People (Ctrl+3)"),
+                                      ("tasks", "p-nav-tasks", "Tasks", "Tasks (Ctrl+4)")):
             b = Gtk.ToggleButton()
-            b.add(icons.image(icon, 20))
+            inner = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+            inner.pack_start(icons.image(icon, 20), False, False, 0)
+            lab = Gtk.Label(label=label)
+            lab.get_style_context().add_class("folio-navrail-label")
+            inner.pack_start(lab, False, False, 0)
+            b.add(inner)
             b.set_relief(Gtk.ReliefStyle.NONE)
             b.set_tooltip_text(tip)
             b.set_active(key == "mail")
-            b.connect("clicked", lambda btn, k=key: self.run("go:" + k))
-            nav.pack_start(b, True, True, 0)
+            b.connect("clicked", lambda btn, k=key: self._nav_clicked(btn, k))
+            nav.pack_start(b, False, False, 0)
             self.nav_buttons[key] = b
-        box.pack_end(nav, False, False, 0)
-        self.folder_box = box
+        self.nav_bar = nav
+        return nav
+
+    def _nav_clicked(self, btn, key):
+        if getattr(self, "_nav_quiet", False):
+            return
+        if key == self.module:
+            # a toggle clicked while its view is open stays pressed
+            self._nav_quiet = True
+            btn.set_active(True)
+            self._nav_quiet = False
+            return
+        self.run("go:" + key)
 
     def folder_label(self, f):
         if f["role"] in ROLE_NAMES:

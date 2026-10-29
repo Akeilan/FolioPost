@@ -156,3 +156,6 @@ tooltip label { color: #f0f0f0; }
 .folio-backstage button:not(.suggested-action):not(.link):not(.flat):not(.folio-bs-navbtn) { background-color: #2b2b2b; background-image: none; }
 .folio-messagebar { background: #433519; }
 .folio-messagebar label { color: #f3f2f1; }
+.folio-navrail { border-right-color: #404040; }
+.folio-navrail button:checked { border-left-color: #8c8cd9; }
+.folio-navrail-label { color: #d0d0d0; }
