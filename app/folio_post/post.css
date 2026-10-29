@@ -33,3 +33,8 @@
 .folio-table { border: 1px solid #999999; } .folio-cell { border-radius: 0; border-color: #999999; min-height: 22px; }
 .folio-messagebar { background: #fff4ce; padding: 4px 0; }
 .folio-messagebar label { color: #323130; }
+/* the navigation rail down the left edge (Mail, Calendar, People, Tasks) */
+.folio-navrail { border-top: none; border-right: 1px solid #e1e1e1; padding: 4px 2px; min-width: 64px; }
+.folio-navrail button { min-height: 52px; min-width: 60px; padding: 4px 2px; border-left: 3px solid transparent; }
+.folio-navrail button:checked { border-bottom: none; border-left: 3px solid #333366; }
+.folio-navrail-label { font-size: 8pt; color: #444444; }

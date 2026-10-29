@@ -594,6 +594,18 @@ try:
     check(win.module == "people" and win.nav_buttons["people"].get_active(), "the Navigation bar opens People")
     win.run("go:mail")
     check(win.module == "mail" and win.nav_buttons["mail"].get_active(), "and back to Mail")
+    # the Navigation bar stays on screen in every view, and its Mail button brings the inbox back
+    for view in ("calendar", "people", "tasks"):
+        win.nav_buttons[view].clicked()
+        pump(0.3)
+        check(win.module == view and win.nav_buttons["mail"].get_mapped(),
+              "the Navigation bar is on screen in %s" % view)
+        win.nav_buttons["mail"].clicked()
+        pump(0.3)
+        check(win.module == "mail" and win.nav_buttons["mail"].get_active(), "its Mail button goes back from %s" % view)
+    win.nav_buttons["mail"].clicked()
+    pump(0.1)
+    check(win.module == "mail" and win.nav_buttons["mail"].get_active(), "clicking Mail while in Mail keeps it pressed")
     win.run("view-mode:single")
     win.run("reset-view")
     check(win.vset("mode", "compact") == "compact", "Reset View")
