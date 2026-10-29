@@ -54,7 +54,7 @@ def load():
             return None
         from folio.native import engine as wengine, htmlexport, htmlpaste, spell
     except Exception as e:  # an old or broken copy: the simple editor still works
-        print("Folio Post: Writer's editor isn't available:", e)
+        print("Folio Post: Folio Page's editor isn't available:", e)
         return None
     _mods = {"native": native, "engine": wengine, "htmlexport": htmlexport, "htmlpaste": htmlpaste, "spell": spell,
              "templates": os.path.join(d, "templates")}
@@ -157,7 +157,7 @@ class WriterEditor(Gtk.EventBox):
         super().__init__()
         m = load()
         if m is None:
-            raise RuntimeError("Writer's editor isn't available")
+            raise RuntimeError("Folio Page's editor isn't available")
         self.m = m
         self.win = _Win(self)
         self.engine = m["engine"].NativeEngine(author=GLib.get_real_name() or "")
