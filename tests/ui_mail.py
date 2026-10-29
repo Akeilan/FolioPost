@@ -476,19 +476,26 @@ try:
     saved_gmail = dict(accmod.GMAIL)
     accmod.GMAIL.update(imap_host="127.0.0.1", imap_port=ip, imap_security="none", smtp_host="127.0.0.1",
                         smtp_port=sp, smtp_security="none")
+    # no Google account in Online Accounts: the browser sign-in, never Settings > Online Accounts
     dlg.email_entry.set_text("ron@gmail.com")
     dlg.response(Gtk.ResponseType.OK)
     pump(0.2)
-    check(dlg.page == "gmail" and dlg.use_goa, "Gmail page uses Online Accounts")
+    check(dlg.page == "gmail" and dlg.use_browser and not dlg.use_goa and not opened,
+          "Gmail page: Sign in with Google in the browser when Online Accounts has no working account")
+    dlg.response(1)
+    pump(0.1)
+    # a Google account that works in Online Accounts: connects with nothing to type
+    stub.accs.append({"id": "goa1", "path": "/x", "provider": "google", "email": "ron@gmail.com", "mail": True,
+                      "calendar": True, "contacts": True})
+    dlg.email_entry.set_text("ron@gmail.com")
+    dlg.response(Gtk.ResponseType.OK)
+    pump(0.2)
+    check(dlg.page == "gmail" and dlg.use_goa, "Gmail page uses the working Online Accounts entry")
     check(entries(dlg) == [], "nothing to type on the Gmail page: %s" % [e.get_placeholder_text() for e in entries(dlg)])
     shot(dlg, "gmail_goa")
     dlg.response(Gtk.ResponseType.OK)
-    pump(0.3)
-    check(opened and "Waiting" in dlg.msg.get_text(), "Connect opens Online Accounts and waits for the account")
-    stub.accs.append({"id": "goa1", "path": "/x", "provider": "google", "email": "ron@gmail.com", "mail": True,
-                      "calendar": True, "contacts": True})
     ok = wait(lambda: any(a["email"] == "ron@gmail.com" for a in store.accounts()), 20)
-    check(ok, "the Online Accounts sign-in adds the Gmail account")
+    check(ok and not opened, "the Online Accounts sign-in adds the Gmail account")
     ron = [a for a in store.accounts() if a["email"] == "ron@gmail.com"]
     check(ron and ron[0]["config"].get("auth") == "goa" and ron[0]["config"].get("goa_id") == "goa1",
           "account kept as an Online Accounts one")
