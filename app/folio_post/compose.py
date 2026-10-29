@@ -21,7 +21,7 @@ def make_editor():
         try:
             return writered.WriterEditor()
         except Exception as e:
-            print("Folio Post: Writer's editor failed to start:", e)
+            print("Folio Post: Folio Page's editor failed to start:", e)
     return RichEditor()
 from .ribbon import CheckControl, ComboControl, Ribbon, SplitButton, Tab, menu_popover
 from .ribbon_post import Builder

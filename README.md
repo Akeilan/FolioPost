@@ -16,7 +16,7 @@ Reading Pane, and Outlook's keyboard shortcuts. Part of the Folio suite.
   server at the next Send/Receive, new mail waits in the Outbox.
 - **Safe reading:** HTML mail is shown by Post's own renderer: no scripts, no remote pictures until you
   allow them, tracking pixels dropped.
-- **Writing mail in Folio Writer's editor:** the message is laid out by Writer's own document engine
+- **Writing mail in Folio Page's editor (formerly Folio Writer):** the message is laid out by Page's own document engine
   (fonts, styles, lists, tables, pictures, links, spelling marks), the way Outlook writes mail in Word, and
   goes out as HTML with a plain-text part. Writer's engine is vendored in `vendor/writer` by
   `tools/sync_writer.sh`; when it can't load, Post's own editor is used (`FOLIO_POST_EDITOR=simple` asks for it).
