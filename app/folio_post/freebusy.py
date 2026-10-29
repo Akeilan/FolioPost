@@ -102,7 +102,12 @@ def caldav_principal_calendars(c, principal):
     sub = Client(c.url(home), c.user, c.password, c.token)
     sub.principal = lambda: None
     sub.home = lambda: home
-    return name, sub.calendars()
+    try:
+        return name, sub.calendars()
+    except DavError as e:
+        if e.status in (401, 403, 404):
+            return name, []                  # not shared with this account
+        raise
 
 
 def caldav_find_principal(c, email):
@@ -241,7 +246,7 @@ def lookup(app, acc, emails, start, end):
             if cals:
                 cl = app.calsync.client_for(cals[0])
                 res.update(caldav_freebusy(cl, acc["email"], emails, start, end))
-    except Exception as e:  # noqa: F841  (no free/busy: the rows say "No information")
+    except Exception:  # no free/busy: the rows say "No information"
         import traceback
         traceback.print_exc()
     me = acc["email"].lower()
