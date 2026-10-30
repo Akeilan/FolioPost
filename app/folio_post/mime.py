@@ -105,6 +105,18 @@ def attachments(msg):
         ctype = p.get_content_type()
         cid = (header(p, "Content-ID") or "").strip("<> ")
         name = p.get_filename()
+        if ctype in ("application/ms-tnef", "application/vnd.ms-tnef"):
+            # Outlook's winmail.dat (M3-09): the files inside it, not the container itself
+            from . import tnef
+            try:
+                t = tnef.parse(p.get_payload(decode=True) or b"")
+            except Exception:
+                t = None
+            if t is not None:
+                for tname, tdata in t["attachments"]:
+                    out.append({"name": tname, "type": mimetypes.guess_type(tname)[0] or "application/octet-stream",
+                                "size": len(tdata), "data": tdata, "cid": "", "inline": False})
+                continue
         if disp == "attachment" or (name and ctype not in ("text/plain", "text/html")) or \
                 (cid and ctype.startswith("image/")):
             try:
@@ -117,6 +129,20 @@ def attachments(msg):
             out.append({"name": name, "type": ctype, "size": len(data), "data": data, "cid": cid,
                         "inline": disp != "attachment" and bool(cid)})
     return out
+
+
+def tnef_of(msg):
+    """The parsed winmail.dat an Outlook message carries, or None (M3-09)."""
+    from . import tnef
+    for p in msg.walk():
+        if p.get_content_type() in ("application/ms-tnef", "application/vnd.ms-tnef"):
+            try:
+                t = tnef.parse(p.get_payload(decode=True) or b"")
+            except Exception:
+                t = None
+            if t is not None:
+                return t
+    return None
 
 
 def thread_key(msg):

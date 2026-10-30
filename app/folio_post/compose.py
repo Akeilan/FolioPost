@@ -769,6 +769,9 @@ class ComposeWindow(Gtk.Window):
         m = mime.build(sender, fix(to), fix(cc), fix(bcc), subject, text, html_body, self.attachments, inline,
                        in_reply_to=in_reply_to, references=refs, importance=self.importance,
                        request_receipt=self.read_receipt, extra=extra)
+        if self.voting and not for_draft and self.app.setting("outlook_voting", True):
+            from . import voting
+            voting.add_outlook(m, self.voting)
         if for_draft:
             m["X-Folio-Draft"] = "1"
         return m

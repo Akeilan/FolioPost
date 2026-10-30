@@ -3,7 +3,11 @@ people it goes to answer with one click (a reply whose subject starts with the c
 Outlook's answers do); the sender's Sent Items copy shows the tally under Tracking.
 
 The choices travel in an X-Folio-Voting header, and the message also carries a line with a
-link for each choice, so people whose mail app has no voting buttons can answer too."""
+link for each choice, so people whose mail app has no voting buttons can answer too.
+
+M3-09: the message also carries Outlook's own voting information (winmail.dat, TNEF) so Outlook
+shows its voting buttons; Options > Mail can turn that off. Outlook's voting messages show their
+buttons here too, and the answer to one carries Outlook's voting response."""
 import re
 import urllib.parse
 from html import escape
@@ -32,7 +36,36 @@ def footer(choices, sender, subject):
 
 def choices_of(msg):
     from . import mime
-    return parse_choices(mime.header(msg, HEADER))
+    got = parse_choices(mime.header(msg, HEADER))
+    return got or outlook_choices(msg)
+
+
+def outlook_choices(msg):
+    """The choices of Outlook's voting buttons on a message (from its winmail.dat)."""
+    from . import mime, tnef
+    t = mime.tnef_of(msg)
+    if not t:
+        return []
+    vs = t["props"].get((tnef.PSETID_COMMON, tnef.LID_VERB_STREAM))
+    return tnef.vote_choices(vs) if isinstance(vs, bytes) else []
+
+
+def add_outlook(m, choices=None, response=None, original=None):
+    """Put Outlook's voting information on a message about to be sent: the buttons (choices) or
+    the answer (response, to an Outlook message `original`)."""
+    from . import mime, tnef
+    corr = (m["Message-ID"] or "").strip() or "folio"
+    if response is not None:
+        tag = None
+        t = mime.tnef_of(original) if original is not None else None
+        if t:
+            tag = t["props"].get(tnef.TAG_REPORT_TAG)
+        data = tnef.voting_response(response, corr, tag if isinstance(tag, bytes) else None)
+    else:
+        data = tnef.voting_message(choices, corr)
+    m["X-MS-TNEF-Correlator"] = corr
+    m.add_attachment(data, maintype="application", subtype="ms-tnef", filename="winmail.dat")
+    return m
 
 
 def vote_of(subject, choices):
@@ -52,6 +85,8 @@ def build_response(acc, original, choice):
     m = mime.build((acc["name"], acc["email"]), to[:1], (), (), "%s: %s" % (choice, subj), "", None, (), (),
                    in_reply_to=mid, references=((mime.header(original, "References") + " " + (mid or "")).strip() or None),
                    extra={VOTE_HEADER: choice})
+    if not mime.header(original, HEADER) and outlook_choices(original):
+        add_outlook(m, response=choice, original=original)
     return m
 
 

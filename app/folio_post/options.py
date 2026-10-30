@@ -43,6 +43,9 @@ def options_dialog(win, page=""):
     remind = Gtk.CheckButton(label="Remind me when I mention an attachment but haven't attached anything")
     remind.set_active(app.setting("attachment_reminder", True))
     m.pack_start(remind, False, False, 0)
+    outlook_vote = Gtk.CheckButton(label="Send voting buttons Outlook shows (adds Outlook's winmail.dat, which other mail apps show as a file)")
+    outlook_vote.set_active(app.setting("outlook_voting", True))
+    m.pack_start(outlook_vote, False, False, 0)
     autosave = Gtk.SpinButton.new_with_range(1, 99, 1)
     autosave.set_value(app.setting("autosave_minutes", 3))
     row = Gtk.Box(spacing=6)
@@ -108,6 +111,7 @@ def options_dialog(win, page=""):
         if resp == Gtk.ResponseType.OK:
             app.settings["author"] = name.get_text()
             app.settings["attachment_reminder"] = remind.get_active()
+            app.settings["outlook_voting"] = outlook_vote.get_active()
             app.settings["autosave_minutes"] = int(autosave.get_value())
             app.settings["mark_read"] = "wait" if wait.get_active() else "change" if change.get_active() else "never"
             app.settings["mark_read_seconds"] = int(secs.get_value())
