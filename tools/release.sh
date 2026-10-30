@@ -15,7 +15,7 @@ chroot /srv/jammy bash -c ". /root/cargoenv.sh 2>/dev/null; cd /src/postcore && 
 cp /srv/jammy/src/postcore/target/release/libfolio_core.so $R/vendor/writer/folio_core.so
 rsync -a --delete --exclude .git $R/ /srv/jammy/src/post/
 echo "== engine"
-chroot /srv/jammy bash -c "cd /src/post; { FOLIO_POST_FILE_SECRETS=1 python3 tests/test_engine.py; TZ=Europe/Amsterdam python3 tests/test_calendar.py; python3 tests/test_people.py; python3 tests/test_ews.py; python3 tests/test_b3.py; DISPLAY=:${XD:-97} python3 tests/test_b3b.py; } | grep -E '^FAIL|passed|FAILED'"
+chroot /srv/jammy bash -c "cd /src/post; { FOLIO_POST_FILE_SECRETS=1 python3 tests/test_engine.py; TZ=Europe/Amsterdam python3 tests/test_calendar.py; python3 tests/test_people.py; python3 tests/test_ews.py; python3 tests/test_b3.py; python3 tests/test_tnef.py; DISPLAY=:${XD:-97} python3 tests/test_b3b.py; } | grep -E '^FAIL|passed|FAILED'"
 echo "== ui (source)"
 chroot /srv/jammy bash -c "cd /src/post; for u in ${UI_TESTS:-ui_mail.py ui_editor.py ui_writered.py ui_attach.py ui_calendar.py ui_people.py ui_tasks.py ui_folders.py ui_pgp.py ui_smime.py ui_b3.py ui_google.py}; do echo \$u; DISPLAY=:${XD:-97} UI_TIMEOUT=300 sh tests/run_ui.sh \$u 2>&1 | grep -E '^FAIL|UI all|UI FAILS|Traceback'; done"
 echo "== X2-01 desktop themes"

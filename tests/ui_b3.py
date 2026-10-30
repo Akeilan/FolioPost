@@ -225,6 +225,14 @@ try:
     check(c.voting == ["Approve", "Reject"], "Options > Use Voting Buttons > Approve;Reject")
     m = c.build()
     check(mime.header(m, voting.HEADER) == "Approve;Reject" and "Vote: Approve | Reject" in mime.text_of(m), "the choices go with the message")
+    # M3-09: Outlook's own voting information too (winmail.dat), unless Options > Mail says not
+    from folio_post import tnef
+    t = mime.tnef_of(m)
+    check(t is not None and tnef.vote_choices(t["props"].get((tnef.PSETID_COMMON, tnef.LID_VERB_STREAM))) == ["Approve", "Reject"]
+          and mime.header(m, "X-MS-TNEF-Correlator") == mime.header(m, "Message-ID"), "voting buttons Outlook shows (winmail.dat)")
+    app.settings["outlook_voting"] = False
+    check(mime.tnef_of(c.build()) is None, "Options > Mail: no winmail.dat when turned off")
+    app.settings["outlook_voting"] = True
     mw.add_user("bob@example.org", "pw")
     c.run("send")
     ok = wait(lambda: any(b"Budget 2027" in x[3] for x in mw.users["bob@example.org"][1]["INBOX"].msgs), 20)
@@ -242,6 +250,8 @@ try:
     win.select_ids([srow["id"]])
     pump(0.3)
     check(win.reading.vote.get_visible() and "Approve: 1" in win.reading.vote_label.get_text(), "the sender sees the tally")
+    check(not srow["attach"] and not any(a["name"] == "winmail.dat" for a in mime.attachments(win.reading.msg)),
+          "the Sent copy shows no winmail.dat")
     shot(win, "vote_tally")
     DLG.append(lambda dlg: Gtk.ResponseType.CLOSE)
     counts = win.reading.show_tracking()
@@ -264,6 +274,27 @@ try:
     win.reading.vote_for("Sushi")
     ok = wait(lambda: any(b"Sushi: Lunch place" in x[3] for x in mw.users["ann@example.org"][1]["INBOX"].msgs), 20)
     check(ok and "You voted Sushi" in win.reading.vote_label.get_text(), "one click sends the vote")
+    # Outlook's voting buttons on a message from Outlook (M3-09)
+    om = mime.build(("Carl", "carl@example.org"), [("Me", "me@example.org")], subject="Offsite date", text="Pick one.")
+    om["X-MS-TNEF-Correlator"] = om["Message-ID"]
+    om.add_attachment(tnef.build([(tnef.PT_BINARY, (tnef.PSETID_COMMON, tnef.LID_VERB_STREAM), tnef.verb_stream(["May", "June"]))]),
+                      maintype="application", subtype="ms-tnef", filename="winmail.dat")
+    mw.users["me@example.org"][1]["INBOX"].add(mime.to_bytes(om))
+    mw.add_user("carl@example.org", "pw")
+    app.send_receive([iaid])
+    wait(lambda: not app.busy(), 20)
+    orow = [r for r in store.messages(inbox["id"]) if r["subject"] == "Offsite date"][0]
+    win.select_ids([orow["id"]])
+    pump(0.3)
+    names = [b.get_label() for b in win.reading.vote_buttons.get_children()]
+    check(names == ["May", "June"] and not orow["attach"], "Outlook's voting buttons show (and winmail.dat isn't an attachment)")
+    shot(win, "vote_outlook")
+    win.reading.vote_for("June")
+    ok = wait(lambda: any(b"June: Offsite date" in x[3] for x in mw.users["carl@example.org"][1]["INBOX"].msgs), 20)
+    ans = [mime.parse(x[3]) for x in mw.users["carl@example.org"][1]["INBOX"].msgs if b"June: Offsite date" in x[3]]
+    at = mime.tnef_of(ans[0]) if ans else None
+    check(ok and at is not None and at["props"].get((tnef.PSETID_COMMON, tnef.LID_VERB_RESPONSE)) == "June",
+          "the answer carries Outlook's voting response")
 
     # ---------------------------------------------------------------- Outlook templates
     c = app.compose(account=iaid, to="Ann <ann@example.org>", subject="Weekly report")
